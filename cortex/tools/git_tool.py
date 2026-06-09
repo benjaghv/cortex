@@ -64,22 +64,40 @@ _BLOCKED_PATTERNS = [
     "push --force",
     "reset --hard",
     "reset -h",
-    "--delete --remote",   # deleting remote branches
+    "--delete --remote",
 ]
 
-# Subcommands that modify state — add a soft warning to the result
-_WRITE_OPS = {"add", "commit", "push", "pull", "merge", "rebase", "cherry-pick",
-               "revert", "rm", "mv", "restore", "checkout", "switch", "clone", "init"}
+# After these ops, auto-append a status check so the agent sees the result
+_VERIFY_OPS  = {"commit", "push", "pull", "merge", "rebase", "revert"}
+# Push and pull: retry up to this many times on transient failure
+_MAX_RETRIES = 2
+_RETRY_OPS   = {"push", "pull"}
+_TIMEOUT     = 30  # seconds per attempt
 
-_TIMEOUT = 30  # seconds
+# Exit codes / stderr patterns that are worth retrying (transient / network)
+_RETRY_SIGNALS = ("timeout", "timed out", "connection", "network", "unable to connect",
+                  "could not resolve", "ssl", "temporarily unavailable")
+
+
+def _run_git(args: str, cwd: str | None) -> tuple[int, str]:
+    """Run `git <args>`, return (returncode, combined output)."""
+    r = subprocess.run(
+        f"git {args}",
+        shell=True, capture_output=True, timeout=_TIMEOUT, cwd=cwd,
+    )
+    stdout = r.stdout.decode("utf-8", errors="replace").strip()
+    stderr = r.stderr.decode("utf-8", errors="replace").strip()
+    combined = "\n".join(filter(None, [stdout, stderr]))
+    return r.returncode, combined or "(no output)"
 
 
 def execute(args: str, cwd: str | None = None, **_) -> str:
+    import time
+
     args = args.strip()
     if not args:
         return "[ERROR] No git subcommand provided."
 
-    # Extract subcommand
     subcommand = args.split()[0].lower().lstrip("-")
 
     if subcommand not in _ALLOWED:
@@ -88,34 +106,53 @@ def execute(args: str, cwd: str | None = None, **_) -> str:
             f"Allowed: {', '.join(sorted(_ALLOWED))}"
         )
 
-    # Check for blocked argument patterns
     args_lower = args.lower()
     for pat in _BLOCKED_PATTERNS:
         if pat in args_lower:
             return (
                 f"[BLOCKED] Argument pattern '{pat}' is not allowed "
-                f"(destructive operation). Use a safer alternative."
+                "(destructive operation). Use a safer alternative."
             )
 
-    cmd = f"git {args}"
     try:
-        r = subprocess.run(
-            cmd,
-            shell=True,
-            capture_output=True,
-            timeout=_TIMEOUT,
-            cwd=cwd,
-        )
-        stdout = r.stdout.decode("utf-8", errors="replace").strip()
-        stderr = r.stderr.decode("utf-8", errors="replace").strip()
+        # ── Execute with optional retry ───────────────────────────────────
+        attempts = _MAX_RETRIES if subcommand in _RETRY_OPS else 1
+        last_code, last_out = 0, ""
 
-        if r.returncode != 0:
-            # Git often sends informational output to stderr even on success-ish ops
-            combined = "\n".join(filter(None, [stdout, stderr]))
-            return f"[EXIT {r.returncode}]\n{combined}"
+        for attempt in range(1, attempts + 1):
+            last_code, last_out = _run_git(args, cwd)
 
-        output = stdout or stderr or "(no output)"
-        return output
+            if last_code == 0:
+                break  # success
+
+            # Only retry on transient/network errors
+            is_transient = any(sig in last_out.lower() for sig in _RETRY_SIGNALS)
+            if attempt < attempts and is_transient:
+                time.sleep(2 * attempt)  # 2s, 4s back-off
+                continue
+            break  # non-transient or exhausted retries
+
+        # ── Build result ──────────────────────────────────────────────────
+        parts: list[str] = []
+
+        if last_code != 0:
+            retry_note = f" (failed after {attempts} attempt{'s' if attempts > 1 else ''})" \
+                         if attempts > 1 else ""
+            parts.append(f"[EXIT {last_code}]{retry_note}\n{last_out}")
+        else:
+            parts.append(last_out)
+
+        # ── Auto-verify after write ops ───────────────────────────────────
+        if subcommand in _VERIFY_OPS:
+            _, status_out = _run_git("status", cwd)
+            parts.append(f"\n── post-{subcommand} status ──\n{status_out}")
+
+            # After push, also confirm remote is in sync
+            if subcommand == "push" and last_code == 0:
+                _, log_out = _run_git("log --oneline -1", cwd)
+                parts.append(f"\n── latest commit ──\n{log_out}")
+
+        return "\n".join(parts)
 
     except subprocess.TimeoutExpired:
         return f"[TIMEOUT] git {args[:40]}… exceeded {_TIMEOUT}s."
