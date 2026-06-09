@@ -466,17 +466,35 @@ def history(limit: int = typer.Option(15, "--limit", "-n")):
 
 @app.command()
 def stats():
-    """Show cumulative tokens processed locally + money saved vs cloud."""
+    """Show cumulative tokens processed + estimated cloud cost comparison."""
     from cortex import stats as S
+    try:
+        from cortex.config import Settings
+        cfg = Settings.load()
+        in_p  = cfg.cost_ref_input_per_1m
+        out_p = cfg.cost_ref_output_per_1m
+    except Exception:
+        in_p, out_p = S._DEFAULT_IN, S._DEFAULT_OUT
     print_banner(version=__version__)
-    s = S.summary()
+    s = S.summary(in_p, out_p)
     console.print()
-    console.print(f"  [bold #4ADE80]${s['saved_usd']:.2f}[/] [dim]saved vs cloud[/]")
-    console.print(f"  [bold #22D3EE]{s['total_tokens']:,}[/] [dim]total tokens[/] "
-                  f"[meta]({s['prompt_tokens']:,} in · {s['completion_tokens']:,} out)[/]")
+    console.print(f"  [bold #4ADE80]${s['saved_usd']:.2f}[/] [dim]estimated saved vs cloud[/]")
+    console.print(f"  [bold #22D3EE]{s['total_tokens']:,}[/] [dim]tokens processed[/]  "
+                  f"[meta]{s['prompt_tokens']:,} in · {s['completion_tokens']:,} out[/]")
     console.print(f"  [bold #7C5CFF]{s['runs']}[/] [dim]runs[/]")
     console.print()
-    print_info("Reference prices configurable: cost_ref_input_per_1m / _output_per_1m")
+    if in_p >= 2.5:
+        _label = "Claude Sonnet / GPT-4.1" if in_p >= 2.9 else "GPT-4o"
+    elif in_p >= 0.8:
+        _label = "Claude Haiku / GPT-4o-mini"
+    else:
+        _label = "custom"
+    console.print(f"  [dim]Reference: ${in_p}/1M input · ${out_p}/1M output "
+                  f"({_label} equivalent)[/]")
+    console.print(f"  [dim]Formula: (input_tok × ${in_p} + output_tok × ${out_p}) / 1,000,000[/]")
+    console.print(f"  [dim]Override in ~/.cortex/config.toml: "
+                  f"cost_ref_input_per_1m / cost_ref_output_per_1m[/]")
+    console.print()
 
 
 @app.command()

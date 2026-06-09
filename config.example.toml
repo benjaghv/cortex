@@ -19,7 +19,23 @@ memory_enabled = true
 memory_recall = 5
 
 # ── Display ─────────────────────────────────────────────────────────────────
-truncate_output = 400
+truncate_output = 3000
+
+# ── Stats / savings reference price ─────────────────────────────────────────
+# What you'd pay per 1M tokens on a comparable cloud model.
+# Used only for the "saved $X" estimate in cortex stats — doesn't affect billing.
+#
+# Claude Sonnet 4.6 / GPT-4.1 (mid-tier, recommended):
+cost_ref_input_per_1m  = 3.0
+cost_ref_output_per_1m = 15.0
+#
+# Claude Haiku 4.5 (cheap but capable):
+# cost_ref_input_per_1m  = 1.0
+# cost_ref_output_per_1m = 5.0
+#
+# GPT-4o (historical reference):
+# cost_ref_input_per_1m  = 2.5
+# cost_ref_output_per_1m = 10.0
 
 # ── Cloud providers (optional) ──────────────────────────────────────────────
 # One key per provider — works for all their models.

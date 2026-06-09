@@ -94,10 +94,10 @@ class Settings(BaseSettings):
 
     # ── Savings estimate (vs cloud) ───────────────────────────────────────────────
     cost_ref_input_per_1m: float = Field(
-        default=2.50, description="Reference cloud price USD per 1M input tokens (GPT-4o class)"
+        default=3.00, description="Reference cloud price USD per 1M input tokens (Claude Sonnet / GPT-4.1)"
     )
     cost_ref_output_per_1m: float = Field(
-        default=10.00, description="Reference cloud price USD per 1M output tokens"
+        default=15.00, description="Reference cloud price USD per 1M output tokens"
     )
 
     # ── Memory ────────────────────────────────────────────────────────────────────

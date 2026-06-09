@@ -17,10 +17,14 @@ from cortex.config import CONFIG_DIR
 
 STATS_FILE = CONFIG_DIR / "stats.json"
 
-# Reference cloud price (USD per 1M tokens). Default ~ GPT-4o class.
-# Override in ~/.cortex/config.toml via cost_ref_input_per_1m / _output_per_1m.
-_DEFAULT_IN = 2.50
-_DEFAULT_OUT = 10.00
+# Reference cloud price (USD per 1M tokens).
+# Default: Claude Sonnet / GPT-4.1 class — current mid-tier (2025).
+# Override in ~/.cortex/config.toml:
+#   cost_ref_input_per_1m  = 3.0   # Claude Sonnet 4.6 / GPT-4.1  (mid-tier)
+#   cost_ref_input_per_1m  = 1.0   # Claude Haiku 4.5              (cheap but capable)
+#   cost_ref_input_per_1m  = 2.5   # GPT-4o                        (historical ref)
+_DEFAULT_IN = 3.0
+_DEFAULT_OUT = 15.0
 
 
 def _load() -> dict:
