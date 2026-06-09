@@ -1,0 +1,45 @@
+# cortex — example config
+# Copy this to ~/.cortex/config.toml and fill in your values.
+# Or run: cortex config --init
+
+# ── LLM local (Ollama) ──────────────────────────────────────────────────────
+model = "ollama/qwen2.5-coder:7b"
+planner_model = "ollama/qwen2.5-coder:1.5b"   # fast local router
+ollama_base_url = "http://localhost:11434"
+max_tokens = 4096
+temperature = 0.1
+max_iterations = 20
+
+# ── Orchestration ───────────────────────────────────────────────────────────
+orchestrator_enabled = true
+max_parallel_agents = 4
+
+# ── Memory ──────────────────────────────────────────────────────────────────
+memory_enabled = true
+memory_recall = 5
+
+# ── Display ─────────────────────────────────────────────────────────────────
+truncate_output = 400
+
+# ── Cloud providers (optional) ──────────────────────────────────────────────
+# One key per provider — works for all their models.
+
+# Kimi K2.6 (Moonshot AI) — best for long agent runs, 256K ctx
+# Get key: https://platform.moonshot.cn
+# kimi_api_key = "sk-..."
+# Usage: cortex run -m moonshot-v1-128k "your task"
+
+# Qwen3.6 (Alibaba) — top agentic coding, 1M ctx
+# Get key: https://dashscope.aliyuncs.com
+# qwen_api_key = "sk-..."
+# Usage: cortex run -m qwen-plus "your task"
+
+# GLM-5.1 (Zhipu AI) — UI/frontend specialist
+# Get key: https://open.bigmodel.cn
+# glm_api_key = "..."
+# Usage: cortex run -m glm-4-plus "your task"
+
+# Ollama Cloud — models with cloud icon in Ollama app
+# Get key: https://ollama.com → Settings → API Keys
+# ollama_cloud_api_key = "ollama-sk-..."
+# Usage: cortex run -m ollama-cloud/llama3.3 "your task"
