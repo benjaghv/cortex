@@ -25,6 +25,36 @@ from cortex.display import (
     print_warning,
 )
 
+_SUGGESTED_MODELS = [
+    # (model,                    size,    ram,     description)
+    ("qwen2.5-coder:1.5b", "1 GB",  "4 GB+",  "fast · low-end hardware"),
+    ("qwen2.5-coder:7b",   "5 GB",  "8 GB+",  "coding · recommended ⭐"),
+    ("qwen3:8b",           "5 GB",  "8 GB+",  "general · good reasoning"),
+    ("deepseek-r1:8b",     "5 GB",  "8 GB+",  "research · chain-of-thought"),
+    ("llama3.2:3b",        "2 GB",  "6 GB+",  "light · fast · general"),
+    ("gemma3:4b",          "3 GB",  "6 GB+",  "multilingual · Google"),
+    ("phi4:14b",           "9 GB",  "16 GB+", "high quality · efficient"),
+    ("deepseek-r1:14b",    "9 GB",  "16 GB+", "strong reasoning"),
+]
+
+
+def _print_model_suggestions() -> None:
+    from rich import box
+    from rich.table import Table
+    t = Table(box=box.SIMPLE_HEAD, border_style="border",
+              header_style="bold #22D3EE", padding=(0, 1))
+    t.add_column("Model",       style="bold white")
+    t.add_column("Size",        style="meta",    justify="right")
+    t.add_column("RAM",         style="meta",    justify="right")
+    t.add_column("Description", style="dim white")
+    for model, size, ram, desc in _SUGGESTED_MODELS:
+        t.add_row(model, size, ram, desc)
+    console.print(t)
+    console.print("  [dim]Pull:  ollama pull <model>[/]")
+    console.print("  [dim]More:  https://ollama.com/search[/]")
+    console.print()
+
+
 app = typer.Typer(
     name="cortex",
     help="Local AI agents with tools, in your terminal — powered by Ollama.",
@@ -348,13 +378,9 @@ def models():
             r.raise_for_status()
             ml = r.json().get("models", [])
         if not ml:
-            print_warning("No local models found.")
             console.print()
-            console.print("  Pull a model first:")
-            console.print("  [bold]  ollama pull qwen2.5-coder:7b[/]   [dim]← recommended[/]")
-            console.print("  [bold]  ollama pull qwen3:8b[/]")
-            console.print("  [bold]  ollama pull deepseek-r1:8b[/]")
-            console.print()
+            console.print("  [bold #FACC15]No local models found.[/]  Pull one first:\n")
+            _print_model_suggestions()
             return
         print_models_table(ml, cfg=cfg)
     except Exception:
@@ -365,8 +391,10 @@ def models():
         console.print("  [#22D3EE]1.[/] Open a NEW terminal and run:  [bold]ollama serve[/]")
         console.print("  [#22D3EE]2.[/] Windows: check Ollama icon in system tray → must say 'Running'")
         console.print("  [#22D3EE]3.[/] Not installed? Download: [bold]https://ollama.com/download[/]")
-        console.print("  [#22D3EE]4.[/] Then pull a model:  [bold]ollama pull qwen2.5-coder:7b[/]")
         console.print()
+        console.print("  [bold]Recommended models to pull after starting Ollama:[/]")
+        console.print()
+        _print_model_suggestions()
         console.print(f"  [dim]Config URL: {cfg.ollama_base_url}  "
                       "(override: CORTEX_OLLAMA_BASE_URL env var)[/]")
         console.print()

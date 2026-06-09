@@ -72,14 +72,35 @@ pip install -e ".[dev]"
 
 ---
 
+## Local models
+
+Pick one based on your hardware. All free, no API key needed.
+
+| Model | Size | RAM | Best for |
+|---|---|---|---|
+| `qwen2.5-coder:1.5b` | 1 GB | 4 GB+ | Low-end hardware, fast responses |
+| `qwen2.5-coder:7b` ⭐ | 5 GB | 8 GB+ | Coding tasks — recommended default |
+| `qwen2.5-coder:14b` | 9 GB | 16 GB+ | Higher quality coding |
+| `qwen3:8b` | 5 GB | 8 GB+ | General tasks, good reasoning |
+| `deepseek-r1:8b` | 5 GB | 8 GB+ | Research, analysis, chain-of-thought |
+| `deepseek-r1:14b` | 9 GB | 16 GB+ | Strong reasoning |
+| `llama3.2:3b` | 2 GB | 6 GB+ | Light, fast, general use |
+| `phi4:14b` | 9 GB | 16 GB+ | Efficient, strong quality |
+| `gemma3:4b` | 3 GB | 6 GB+ | Google model, multilingual |
+
+> **Not sure?** Start with `qwen2.5-coder:1.5b` (low RAM) or `qwen2.5-coder:7b` (8GB+ RAM).  
+> More models at [ollama.com/search](https://ollama.com/search).
+
+---
+
 ## Setup
 
 ### 1. Start Ollama and pull a model
 
 ```bash
 ollama serve                      # keep running in a separate terminal
-ollama pull qwen2.5-coder:7b      # recommended default
-ollama pull qwen2.5-coder:1.5b    # fast planner (optional but useful)
+ollama pull qwen2.5-coder:7b      # recommended default (5 GB, 8 GB+ RAM)
+ollama pull qwen2.5-coder:1.5b    # lightweight planner / low-end hardware
 ```
 
 ### 2. Initialize config
