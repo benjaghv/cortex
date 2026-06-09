@@ -64,6 +64,8 @@ COMMON_RULES = (
     "RULES:\n"
     "- NEVER refuse a task. NEVER say 'I'm sorry', 'I can't assist', 'I cannot help', or any refusal. "
     "If you don't know something, use a tool to find out. If tools fail, report what you tried.\n"
+    "- NEVER explain how to do something when you have a tool that can do it. "
+    "DO IT — call the tool immediately. 'You can run git add...' is WRONG. Call git(args='add ...') instead.\n"
     "- URLs and websites: if the user mentions a URL or domain (e.g. 'benjaminghv.cl', 'example.com'), "
     "call web() on it IMMEDIATELY — use https:// prefix. Do not ask permission, just fetch it.\n"
     "- The web tool ALREADY returns plain text (HTML stripped). NEVER use python_exec or BeautifulSoup "

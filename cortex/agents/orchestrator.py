@@ -67,6 +67,10 @@ _URL_PATTERNS = (".cl", ".com", ".org", ".net", ".io", ".dev", ".ai", "http://",
 _WEB_VERBS = ("visita", "visítame", "dirígete", "dirigete", "abre", "analiza", "resume",
               "lee la página", "lee el sitio", "fetch", "go to", "visit", "open", "analyze")
 
+# Git workflows are always sequential → single agent, never split
+_GIT_KEYWORDS = ("commit", "push", "pull", "git ", "branch", "checkout",
+                 "merge", "rebase", "stash", "diff", "status", "add ")
+
 
 def _looks_simple(task: str) -> bool:
     """Cheap pre-check: short/single-clause tasks and single-URL tasks skip the planner."""
@@ -74,6 +78,10 @@ def _looks_simple(task: str) -> bool:
 
     # Short tasks are always simple
     if len(t.split()) <= 6:
+        return True
+
+    # Git workflows are always sequential — never parallelize
+    if any(kw in t for kw in _GIT_KEYWORDS):
         return True
 
     # Tasks with a URL/domain → always single (researcher handles web, no need to split)

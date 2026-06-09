@@ -74,7 +74,9 @@ _register(_make(
     role_rules=(
         "- Stay on the coding/files/scripts task you were given; do not browse the web.\n"
         "- Prefer filesystem over shell for reading/writing files.\n"
-        "- For any git task: run git(args='status') first to understand current repo state."
+        "- For ANY git task: call git() tool directly — NEVER explain commands, execute them.\n"
+        "- git add → git(args='add <file>'). git commit → git(args='commit -m \"msg\"'). "
+        "git push → git(args='push'). Do it, don't describe it."
     ),
 ))
 
@@ -113,10 +115,10 @@ _register(_make(
     role_intro="You are cortex's devops specialist. You manage repos, run commands, and inspect project state.",
     tools=("git", "shell", "filesystem", "python_exec"),
     role_rules=(
-        "- Always run git(args='status') before any git write operation.\n"
-        "- Summarize git log/diff output — don't dump raw output unless asked.\n"
-        "- For commits: verify staged files with git(args='diff --cached') before committing.\n"
-        "- Never use --force, reset --hard, or other destructive ops without explicit user instruction."
+        "- EXECUTE git operations using git() tool — NEVER write instructions for the user to run.\n"
+        "- Sequence: git(args='status') → git(args='add <files>') → git(args='commit -m \"msg\"') → git(args='push').\n"
+        "- Summarize git log/diff — don't dump raw output unless asked.\n"
+        "- Never use --force, reset --hard, or destructive ops without explicit user instruction."
     ),
 ))
 
