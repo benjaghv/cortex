@@ -244,6 +244,24 @@ def chat(
                 print_error(f"No model matching '{arg}'. Run /models to list.")
             return True
 
+        # /repo [path] — set active git repo for this session
+        if slug == "/repo":
+            import os
+            from pathlib import Path
+            if not arg:
+                cur = state.get("repo") or os.getcwd()
+                console.print(f"\n  [dim]Active repo:[/] [bold #22D3EE]{cur}[/]\n")
+                return True
+            expanded = str(Path(os.path.expandvars(arg).replace("~", str(Path.home()))).resolve())
+            if not Path(expanded).exists():
+                print_error(f"Path not found: {expanded}")
+                return True
+            if not (Path(expanded) / ".git").exists():
+                print_warning(f"{expanded} doesn't look like a git repo (no .git folder). Set anyway?")
+            state["repo"] = expanded
+            print_success(f"Active repo → {expanded}")
+            return True
+
         # /verbose — toggle detail mode
         if slug == "/verbose":
             state["verbose"] = not state["verbose"]
@@ -258,6 +276,8 @@ def chat(
             console.print("  [#22D3EE]/model <name>[/]    — switch model (partial name ok)")
             console.print("  [#22D3EE]/model <number>[/]  — switch local model by number")
             console.print("  [#22D3EE]/model <letter>[/]  — switch cloud model by letter (a, b, c…)")
+            console.print("  [#22D3EE]/repo <path>[/]     — set active git repo for this session")
+            console.print("  [#22D3EE]/repo[/]            — show current repo path")
             console.print("  [#22D3EE]/verbose[/]         — toggle verbose / clean mode")
             console.print("  [#22D3EE]/dry-run <task>[/]  — plan without executing")
             console.print("  [#22D3EE]exit[/]             — quit")
@@ -310,11 +330,14 @@ def chat(
     _MAX_SESSION_TURNS = 8
     _MAX_SESSION_CHARS = 3000
     session_turns: list[dict] = []   # {task, result} per turn this session
+    state["repo"] = None             # active repo path for git operations
 
     def _build_session_context() -> str:
-        if not session_turns:
+        if not session_turns and not state.get("repo"):
             return ""
         lines = ["CURRENT SESSION (this conversation — use to maintain context):"]
+        if state.get("repo"):
+            lines.append(f"  Active repo (use this path as cwd for ALL git operations): {state['repo']}")
         for i, t in enumerate(session_turns, 1):
             short_result = t["result"][:200].replace("\n", " ")
             if len(t["result"]) > 200:

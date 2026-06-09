@@ -34,9 +34,10 @@ flowchart TD
 
     subgraph D[" Parallel execution "]
         direction LR
-        E[coder\nfilesystem · shell · python]
-        F[researcher\nsearch · web · filesystem]
+        E[coder\nfilesystem · shell · git · python]
+        F[researcher\nsearch · web · browser]
         G[data\nstock · weather · datetime]
+        I[devops\ngit · shell · filesystem]
     end
 
     C --> H
@@ -130,6 +131,18 @@ cortex run "what's the weather in Tokyo?"
 cortex run "read my README.md and summarize it"
 cortex run "get AAPL and NVDA stock prices"
 cortex run "search the web for the latest Python release"
+cortex run "show git log for the last 5 commits"
+cortex run "find software engineer jobs in Santiago on LinkedIn"
+```
+
+### Git workflow
+
+```bash
+cortex chat
+/repo C:\Projects\my-app     # set active repo (any path on your PC)
+dame el status del repo       # git status
+hace commit de todo con mensaje 'fix login bug'
+haz push
 ```
 
 ### Interactive chat session
@@ -141,7 +154,10 @@ cortex chat
 | Command | Action |
 |---|---|
 | `/models` | list local and cloud models |
-| `/model <name or #>` | switch model for this session |
+| `/model <name or #>` | switch local model by name or number |
+| `/model <letter>` | switch cloud model by letter (a, b, c…) |
+| `/repo <path>` | set active git repo for this session |
+| `/repo` | show current active repo path |
 | `/verbose` | toggle verbose mode |
 | `/dry-run <task>` | plan without executing |
 | `exit` | quit |
@@ -229,8 +245,9 @@ cortex/
 
   tools/
     registry.py       → ToolRegistry: name → (schema, executor)
-    filesystem.py     shell.py     web.py      search.py
-    stock.py          weather.py   datetime_tool.py   python_exec.py
+    filesystem.py     shell.py      git_tool.py   web.py
+    browser.py        search.py     stock.py      weather.py
+    datetime_tool.py  python_exec.py
 ```
 
 > `~/.cortex/` — config, stats, memory, run logs. Auto-created, never committed.
