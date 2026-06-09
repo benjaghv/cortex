@@ -75,6 +75,7 @@ _VERBS = {
     ("datetime", None):       ("TIME",    "◷", "info"),
     ("weather", None):        ("WEATHER", "☼", "info"),
     ("python_exec", None):    ("PYTHON",  "▶", "tool.name"),
+    ("document", None):       ("DOC",     "📄", "warning"),
 }
 
 

@@ -71,6 +71,11 @@ _WEB_VERBS = ("visita", "visítame", "dirígete", "dirigete", "abre", "analiza",
 _GIT_KEYWORDS = ("commit", "push", "pull", "git ", "branch", "checkout",
                  "merge", "rebase", "stash", "diff", "status", "add ")
 
+# Document creation is always a single-agent task
+_DOC_KEYWORDS = ("word", ".docx", "documento", "document", "crea un word",
+                 "crea el word", "genérame un word", "generame un word",
+                 "escríbeme un", "escribe un documento", "write a doc")
+
 
 def _looks_simple(task: str) -> bool:
     """Cheap pre-check: short/single-clause tasks and single-URL tasks skip the planner."""
@@ -82,6 +87,10 @@ def _looks_simple(task: str) -> bool:
 
     # Git workflows are always sequential — never parallelize
     if any(kw in t for kw in _GIT_KEYWORDS):
+        return True
+
+    # Document creation is always single
+    if any(kw in t for kw in _DOC_KEYWORDS):
         return True
 
     # Tasks with a URL/domain → always single (researcher handles web, no need to split)

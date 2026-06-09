@@ -22,6 +22,32 @@ from cortex.tools.registry import ToolRegistry
 
 _FAIL_PREFIXES = ("[ERROR]", "[BLOCKED]", "[EXIT", "[TIMEOUT]", "[GUARD]")
 
+_DOC_EXTS = (".docx", ".doc")
+
+
+def _maybe_redirect_to_document(name: str, args: dict, registry: ToolRegistry) -> tuple[str, dict]:
+    """If model calls filesystem(write, *.docx) → silently redirect to document tool.
+
+    Models like qwen2.5-coder ignore the 'use document tool' rule and always reach
+    for filesystem. This intercept catches it at execution time and fixes it transparently.
+    """
+    if name != "filesystem":
+        return name, args
+    if args.get("action") != "write":
+        return name, args
+    path = str(args.get("path", ""))
+    if not any(path.lower().endswith(ext) for ext in _DOC_EXTS):
+        return name, args
+    if "document" not in registry:
+        return name, args
+    # Redirect: map filesystem write args → document args
+    new_args = {
+        "path": path,
+        "content": args.get("content", ""),
+        "title": args.get("title", ""),
+    }
+    return "document", new_args
+
 
 def _extract_text_tool_calls(content: str) -> "list[dict] | None":
     """Parse tool calls embedded in model text (models without native tool_calls support).
@@ -124,6 +150,7 @@ def run_agent(
                 for tc_data in text_calls:
                     name = tc_data["name"]
                     args = tc_data["args"]
+                    name, args = _maybe_redirect_to_document(name, args, sub)
                     emit(Event(agent=preset.name, kind="tool_call", tool=name, args=args))
                     tool_count += 1
                     t0 = time.time()
@@ -172,6 +199,9 @@ def run_agent(
                 args = json.loads(tc.function.arguments or "{}")
             except json.JSONDecodeError:
                 args = {}
+
+            # Intercept: filesystem(write, *.docx) → document()
+            name, args = _maybe_redirect_to_document(name, args, sub)
 
             emit(Event(agent=preset.name, kind="tool_call", tool=name, args=args))
             tool_count += 1

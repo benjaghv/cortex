@@ -72,6 +72,8 @@ COMMON_RULES = (
     "to parse web content — just read the text the web tool returned and answer from it directly.\n"
     "- Greetings, general questions, explanations → answer DIRECTLY, no tools.\n"
     "- Create a FOLDER → filesystem(action='mkdir', path=...). NEVER use 'write' for a folder.\n"
+    "- Word document / .docx file → ALWAYS use document() tool, NEVER filesystem. "
+    "Pass path ending in .docx, title=, and content= with markdown headings/bullets/bold.\n"
     "- 'on my desktop'/'en mi escritorio' → use the exact Desktop path listed above.\n"
     "- Never invent or fabricate data. If a tool fails, say so honestly.\n"
     "- Read a local file with filesystem(action='read'), never shell.\n"

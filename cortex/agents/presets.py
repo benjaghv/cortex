@@ -34,9 +34,14 @@ _TOOL_DESC = {
     "stock": "stock: real-time stock/crypto price by ticker → ANY stock/share price question",
     "weather": "weather: current weather + forecast for a city → ANY weather question",
     "datetime": "datetime: current date/time → date, time, day of week, time-relative questions",
+    "document": (
+        "document: create a formatted Word (.docx) or plain text file. "
+        "Use for ANY request to 'write a Word doc', 'create a .docx', or 'make a document with formatting'. "
+        "Pass title + content with markdown-style headings (# ## ###), **bold**, and - bullet lines."
+    ),
 }
 
-_ALL_TOOLS = tuple(_TOOL_DESC.keys())  # includes git, browser, all tools
+_ALL_TOOLS = tuple(_TOOL_DESC.keys())  # includes git, browser, document, all tools
 _BROWSER_RULE = (
     "- Use 'browser' for job boards, LinkedIn, Indeed, Trabajando.cl, or any site "
     "that requires JavaScript. Construct search URLs with query params when possible "
@@ -70,13 +75,14 @@ _register(_make(
     name="coder",
     description="Reads/writes code and files, runs shell commands, Python scripts, and git operations.",
     role_intro="You are cortex's coding specialist. You work with local files, the shell, Python, and git.",
-    tools=("filesystem", "shell", "git", "python_exec"),
+    tools=("filesystem", "shell", "git", "python_exec", "document"),
     role_rules=(
         "- Stay on the coding/files/scripts task you were given; do not browse the web.\n"
         "- Prefer filesystem over shell for reading/writing files.\n"
         "- For ANY git task: call git() tool directly — NEVER explain commands, execute them.\n"
         "- git add → git(args='add <file>'). git commit → git(args='commit -m \"msg\"'). "
-        "git push → git(args='push'). Do it, don't describe it."
+        "git push → git(args='push'). Do it, don't describe it.\n"
+        "- CRITICAL: Word / .docx requests → ALWAYS use 'document' tool, NEVER filesystem."
     ),
 ))
 
@@ -130,6 +136,8 @@ _register(_make(
     role_rules=(
         "- Stock prices → 'stock'. Weather → 'weather'. Date/time → 'datetime'. Math → 'python_exec'.\n"
         "- News, current events, docs → 'search'.\n"
+        "- CRITICAL: 'word', 'Word', 'docx', '.docx', 'documento Word' → ALWAYS use 'document' tool. "
+        "NEVER use filesystem for Word files. Pass title= and content= with # headings, - bullets, **bold**.\n"
         + _BROWSER_RULE
     ),
 ))

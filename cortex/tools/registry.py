@@ -19,6 +19,7 @@ from cortex.config import Settings
 from cortex.tools import (
     browser,
     datetime_tool,
+    document,
     filesystem,
     git_tool,
     python_exec,
@@ -52,6 +53,7 @@ def _default_entries(cfg: Settings) -> dict[str, ToolEntry]:
         ("datetime", datetime_tool.SCHEMA, lambda a: datetime_tool.execute()),
         ("weather", weather.SCHEMA, lambda a: weather.execute(**a)),
         ("python_exec", python_exec.SCHEMA, lambda a: python_exec.execute(**a)),
+        ("document",   document.SCHEMA,    lambda a: document.execute(**a)),
     ]
     return {name: ToolEntry(name, schema, ex) for name, schema, ex in raw}
 
