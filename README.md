@@ -195,7 +195,7 @@ cortex version           Show version
 | Agent | Tools | Best for |
 |---|---|---|
 | **generalist** | all tools | simple or ambiguous tasks — default fallback |
-| **coder** | filesystem, shell, git, python_exec | files, scripts, code, git ops |
+| **coder** | filesystem, shell, git, python_exec, document | files, scripts, code, git ops, Word docs |
 | **devops** | git, shell, filesystem, python_exec | repo management, commits, diffs |
 | **researcher** | search, web, browser, filesystem | web search, URL fetching, JS-heavy sites, job boards |
 | **data** | stock, weather, datetime, python_exec | live prices, weather, date math |
@@ -218,8 +218,10 @@ Each agent only sees its assigned tools — no accidental cross-contamination.
 | `weather` | Current weather + forecast for any city | No |
 | `datetime` | Current local date and time | No |
 | `python_exec` | Run a Python snippet, capture output | No |
+| `document` | Create formatted Word (.docx) or plain text files with headings, bullets, bold | No* |
 
 > \* `browser` requires Playwright: `pip install playwright && playwright install chromium`
+> \* `document` (.docx) requires python-docx: `pip install python-docx` (falls back to .txt if missing)
 
 ---
 
@@ -247,7 +249,7 @@ cortex/
     registry.py       → ToolRegistry: name → (schema, executor)
     filesystem.py     shell.py      git_tool.py   web.py
     browser.py        search.py     stock.py      weather.py
-    datetime_tool.py  python_exec.py
+    datetime_tool.py  python_exec.py  document.py
 ```
 
 > `~/.cortex/` — config, stats, memory, run logs. Auto-created, never committed.
