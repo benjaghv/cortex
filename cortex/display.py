@@ -66,6 +66,9 @@ _VERBS = {
     ("filesystem", "search"): ("SEARCH",  "⌕", "info"),
     ("shell", None):          ("RUN",     "»", "tool.name"),
     ("web", None):            ("FETCH",   "↯", "info"),
+    ("browser", "fetch"):     ("BROWSE",  "🌐", "info"),
+    ("browser", "search"):    ("BROWSE",  "🌐", "info"),
+    ("browser", None):        ("BROWSE",  "🌐", "info"),
     ("search", None):         ("SEARCH",  "⌕", "info"),
     ("stock", None):          ("QUOTE",   "$", "success"),
     ("datetime", None):       ("TIME",    "◷", "info"),
@@ -490,13 +493,23 @@ _CLOUD_PROVIDERS: list[dict] = [
         "vendor": "Ollama",
         "site": "api.ollama.com",
         "models": [
-            ("ollama-cloud/gemma3:4b",   "free  · fast"),
-            ("ollama-cloud/gemma3:27b",  "free  · better"),
-            ("ollama-cloud/kimi-k2.6",   "paid  · 595B Kimi"),
-            ("ollama-cloud/qwen3-coder-next", "paid  · coding"),
+            ("ollama-cloud/kimi-k2.6:cloud",        "595B · Kimi"),
+            ("ollama-cloud/qwen3.5:cloud",           "Qwen 3.5"),
+            ("ollama-cloud/glm-5.1:cloud",           "GLM 5.1"),
+            ("ollama-cloud/minimax-m3:cloud",        "MiniMax M3"),
+            ("ollama-cloud/nemotron-3-super:cloud",  "NVIDIA Nemotron"),
+            ("ollama-cloud/gemma4:31b-cloud",        "31B · Google Gemma 4"),
+            ("ollama-cloud/gemma3:4b",               "4B · fast · free"),
+            ("ollama-cloud/gemma3:27b",              "27B · free"),
+            ("ollama-cloud/qwen3-coder-next",        "coding · free?"),
         ],
     },
 ]
+
+
+def _is_ollama_cloud_model(name: str) -> bool:
+    """Detect models served via Ollama Cloud proxy (tagged :cloud or -cloud)."""
+    return name.endswith(":cloud") or "-cloud" in name
 
 
 def print_models_table(models: list[dict], cfg=None) -> None:
@@ -504,45 +517,75 @@ def print_models_table(models: list[dict], cfg=None) -> None:
 
     TOOL_MODELS = {"qwen", "llama3", "llama4", "mistral", "gemma", "phi", "command-r", "deepseek"}
 
+    # Split: real local vs Ollama Cloud proxied (:cloud / -cloud suffix)
+    local_models = [m for m in models if not _is_ollama_cloud_model(m.get("name", ""))]
+    cloud_proxied = [m for m in models if _is_ollama_cloud_model(m.get("name", ""))]
+
     # ── LOCAL section ────────────────────────────────────────────
     console.print()
     console.print(Rule(" LOCAL — Ollama ", style="#7C5CFF", align="left"))
-    t = Table(box=box.SIMPLE_HEAD, border_style="border", header_style="bold #22D3EE", padding=(0, 1))
-    t.add_column("#",      style="meta",       width=3)
-    t.add_column("Model",  style="bold white")
-    t.add_column("Size",   style="meta", justify="right")
-    t.add_column("Tools",  justify="center", width=6)
-    for i, m in enumerate(models, 1):
-        name = m.get("name", "")
-        sz   = m.get("size", 0)
-        size = f"{sz / 1e9:.1f} GB" if sz else "—"
-        ok   = any(k in name.lower() for k in TOOL_MODELS)
-        active = "  [bold #4ADE80]← active[/]" if cfg and f"ollama/{name}" == cfg.model else ""
-        t.add_row(
-            str(i),
-            name + active,
-            size,
-            Text("✓" if ok else "·", style="success" if ok else "meta"),
-        )
-    console.print(t)
+    if local_models:
+        t = Table(box=box.SIMPLE_HEAD, border_style="border", header_style="bold #22D3EE", padding=(0, 1))
+        t.add_column("#",      style="meta",       width=3)
+        t.add_column("Model",  style="bold white")
+        t.add_column("Size",   style="meta", justify="right")
+        t.add_column("Tools",  justify="center", width=6)
+        for i, m in enumerate(local_models, 1):
+            name = m.get("name", "")
+            sz   = m.get("size", 0)
+            size = f"{sz / 1e9:.1f} GB" if sz else "—"
+            ok   = any(k in name.lower() for k in TOOL_MODELS)
+            active = "  [bold #4ADE80]← active[/]" if cfg and f"ollama/{name}" == cfg.model else ""
+            t.add_row(
+                str(i),
+                name + active,
+                size,
+                Text("✓" if ok else "·", style="success" if ok else "meta"),
+            )
+        console.print(t)
+    else:
+        console.print("  [dim]No local models. Pull one: ollama pull qwen3:8b[/]")
     console.print(f"  [dim]Switch: /model <name or #>[/]")
 
     # ── CLOUD section ────────────────────────────────────────────
     console.print()
     console.print(Rule(" CLOUD — providers ", style="#7C5CFF", align="left"))
     console.print()
+    cloud_letter_idx = 0  # a, b, c... across all configured cloud providers
     for p in _CLOUD_PROVIDERS:
         key_val = getattr(cfg, p["key_field"], None) if cfg else None
         configured = bool(key_val)
         icon  = "[bold #4ADE80]●[/]" if configured else "[dim #94A3B8]○[/]"
         state = "[bold #4ADE80]configured[/]" if configured else "[dim]no key — add to ~/.cortex/config.toml[/]"
         console.print(f"  {icon}  [bold]{p['label']}[/]  [dim]{p['vendor']} · {p['site']}[/]  {state}")
-        if configured:
-            for model_name, hint in p["models"]:
+
+        if p["label"] == "Ollama Cloud":
+            # Collect all models: hardcoded + any extra from local Ollama :cloud tags
+            known_ids = {model_name for model_name, _ in p["models"]}
+            all_oc_models: list[tuple[str, str]] = list(p["models"])
+            for m in cloud_proxied:
+                local_name = m.get("name", "")
+                cloud_id = f"ollama-cloud/{local_name}"
+                if cloud_id not in known_ids:
+                    all_oc_models.append((cloud_id, "local proxy"))
+            for model_name, hint in all_oc_models:
+                letter = chr(ord("a") + cloud_letter_idx) if configured else " "
+                cloud_letter_idx += 1 if configured else 0
+                lbl = f"[bold #94A3B8]{letter}[/]" if configured else " "
                 active = "  [bold #4ADE80]← active[/]" if cfg and model_name == cfg.model else ""
-                console.print(f"       [#22D3EE]{model_name}[/]  [dim]{hint}[/]{active}")
+                # Show short name (strip ollama-cloud/ prefix for readability)
+                short = model_name.replace("ollama-cloud/", "")
+                console.print(f"    {lbl}  [#22D3EE]{short}[/]  [dim]{hint}[/]{active}")
+        else:
+            if configured:
+                for model_name, hint in p["models"]:
+                    letter = chr(ord("a") + cloud_letter_idx)
+                    cloud_letter_idx += 1
+                    lbl = f"[bold #94A3B8]{letter}[/]"
+                    active = "  [bold #4ADE80]← active[/]" if cfg and model_name == cfg.model else ""
+                    console.print(f"    {lbl}  [#22D3EE]{model_name}[/]  [dim]{hint}[/]{active}")
         console.print()
-    console.print(f"  [dim]Use cloud model: cortex run -m <model-name> 'task'[/]")
+    console.print(f"  [dim]Use cloud model: /model <name> or cortex run -m <name> 'task'[/]")
     console.print()
 
 

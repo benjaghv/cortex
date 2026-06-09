@@ -18,13 +18,25 @@ _TOOL_DESC = {
     "shell": "shell: local commands (git, dir) — Windows only, no bash/grep/curl",
     "python_exec": "python_exec: run Python → math, calculations, data processing (don't guess numbers)",
     "search": "search: DuckDuckGo web search → news, docs, general internet info",
-    "web": "web: fetch a specific URL → when you have an exact URL",
+    "web": "web: fetch a specific URL as plain text → fast, no JavaScript",
+    "browser": (
+        "browser: real headless browser (Playwright/Chromium) → JavaScript sites, "
+        "job boards (LinkedIn, Indeed, Trabajando.cl), SPAs, pages that block plain HTTP. "
+        "action='fetch' loads a URL. action='search' fills a search box and submits. "
+        "Prefer search URLs with query params when known."
+    ),
     "stock": "stock: real-time stock/crypto price by ticker → ANY stock/share price question",
     "weather": "weather: current weather + forecast for a city → ANY weather question",
     "datetime": "datetime: current date/time → date, time, day of week, time-relative questions",
 }
 
 _ALL_TOOLS = tuple(_TOOL_DESC.keys())
+_BROWSER_RULE = (
+    "- Use 'browser' for job boards, LinkedIn, Indeed, Trabajando.cl, or any site "
+    "that requires JavaScript. Construct search URLs with query params when possible "
+    "(e.g. https://cl.indeed.com/jobs?q=...&l=Santiago). "
+    "Use 'web' for simple static pages (docs, Wikipedia, APIs).\n"
+)
 
 
 def _tool_lines(tools: "tuple[str, ...]") -> str:
@@ -61,15 +73,20 @@ _register(_make(
 
 _register(AgentPreset(
     name="researcher",
-    description="Searches the web, fetches URLs, reads docs, and summarizes findings.",
+    description=(
+        "Searches the web, navigates JS-heavy sites (job boards, LinkedIn, etc.), "
+        "fetches URLs, reads docs, and summarizes findings."
+    ),
     system_prompt=build_system_prompt(
         "You are cortex's research specialist. You find and synthesize information from the web and local docs.",
-        _tool_lines(("search", "web", "filesystem")),
-        "- Use 'search' for general queries, 'web' when you already have a URL.\n"
-        "- Cite the source (site/URL) when you state a fact from the web.",
+        _tool_lines(("search", "web", "browser", "filesystem")),
+        "- Use 'search' for general queries, 'web' for simple static URLs, "
+        "'browser' for JavaScript-heavy sites and job boards.\n"
+        + _BROWSER_RULE
+        + "- Cite the source (site/URL) when you state a fact from the web.\n"
+        "- For job listings: include the job title, company, and direct link for each result.",
     ),
-    tools=("search", "web", "filesystem"),
-    model="ollama/deepseek-r1:8b",   # stronger reasoning for research/analysis
+    tools=("search", "web", "browser", "filesystem"),
 ))
 
 _register(_make(
@@ -90,7 +107,8 @@ _register(_make(
     tools=_ALL_TOOLS,
     role_rules=(
         "- Stock prices → 'stock'. Weather → 'weather'. Date/time → 'datetime'. Math → 'python_exec'.\n"
-        "- News, current events, docs → 'search'."
+        "- News, current events, docs → 'search'.\n"
+        + _BROWSER_RULE
     ),
 ))
 

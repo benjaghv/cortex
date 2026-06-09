@@ -17,6 +17,7 @@ from typing import Callable
 
 from cortex.config import Settings
 from cortex.tools import (
+    browser,
     datetime_tool,
     filesystem,
     python_exec,
@@ -43,6 +44,7 @@ def _default_entries(cfg: Settings) -> dict[str, ToolEntry]:
         ("filesystem", filesystem.SCHEMA, lambda a: filesystem.execute(**a)),
         ("shell", shell.SCHEMA, lambda a: shell.execute(settings=cfg, **a)),
         ("web", web.SCHEMA, lambda a: web.execute(**a)),
+        ("browser", browser.SCHEMA, lambda a: browser.execute(**a)),
         ("search", search.SCHEMA, lambda a: search.execute(**a)),
         ("stock", stock.SCHEMA, lambda a: stock.execute(**a)),
         ("datetime", datetime_tool.SCHEMA, lambda a: datetime_tool.execute()),

@@ -49,6 +49,10 @@ def _planner_system() -> str:
         "- If one subtask must CREATE or WRITE a file using results from another subtask, "
         "use 'single' — the generalist handles fetch+write in sequence.\n"
         "- If the task says 'crea/guarda/escribe ... con [datos]', use 'single'.\n"
+        "- Tasks that involve fetching/reading a URL or website → assign to 'researcher' ONLY "
+        "(it has the web tool). NEVER assign web/URL tasks to 'coder' (no web tool).\n"
+        "- If the task is a single action (fetch one URL, ask one question, get one thing), "
+        "use 'single' — do NOT invent parallel subtasks for a single-step task.\n"
         "- Prefer 'single' unless parallelism clearly helps (e.g. fetch stock prices AND "
         "fetch weather at the same time, with no dependency between them).\n"
         "Available agents:\n"
@@ -59,11 +63,24 @@ def _planner_system() -> str:
     )
 
 
+_URL_PATTERNS = (".cl", ".com", ".org", ".net", ".io", ".dev", ".ai", "http://", "https://", "www.")
+_WEB_VERBS = ("visita", "visítame", "dirígete", "dirigete", "abre", "analiza", "resume",
+              "lee la página", "lee el sitio", "fetch", "go to", "visit", "open", "analyze")
+
+
 def _looks_simple(task: str) -> bool:
-    """Cheap pre-check: short, single-clause tasks skip the planner entirely."""
+    """Cheap pre-check: short/single-clause tasks and single-URL tasks skip the planner."""
     t = task.strip().lower()
+
+    # Short tasks are always simple
     if len(t.split()) <= 6:
         return True
+
+    # Tasks with a URL/domain → always single (researcher handles web, no need to split)
+    if any(pat in t for pat in _URL_PATTERNS):
+        return True
+
+    # Multiple independent data requests → allow planner to parallelize
     connectors = (" y ", " and ", "; ", ", luego", ", después", " then ")
     return not any(c in t for c in connectors)
 
@@ -154,17 +171,23 @@ def _run_parallel(task: str, jobs, registry, cfg, cloud) -> str:
 
 def _synthesize(task, lane_ids, results, cfg, cloud) -> str:
     model = cfg.planner_model or cfg.effective_model(cloud=cloud)
-    blocks = "\n\n".join(f"## {lid}\n{results.get(lid, '')}" for lid in lane_ids)
+
+    # Filter out pure-error results so they don't pollute the synthesis
+    good = {lid: r for lid, r in results.items() if not r.startswith("[ERROR]") and not r.startswith("[BLOCKED]")}
+    use = good if good else results  # fall back to all if everything failed
+
+    blocks = "\n\n".join(f"## {lid}\n{use.get(lid, '')}" for lid in lane_ids if lid in use)
     system = (
         "You are cortex. Combine the specialist results below into ONE coherent final "
         "answer for the user. Integrate the information, don't just concatenate. Be concise. "
+        "NEVER mention agent names or internal errors in your answer. "
         "Respond in the same language the user's original task was written in."
     )
     user = f"Original task: {task}\n\nSpecialist results:\n{blocks}"
     try:
         return llm.complete_text(model, system, user, cfg).strip() or blocks
     except Exception:
-        return blocks  # worst case: show the raw per-agent results
+        return blocks
 
 
 # ── run-log ────────────────────────────────────────────────────────────────────────────
@@ -188,7 +211,7 @@ def _save_run_log(task, model, mode, jobs, duration_s) -> None:
 # ── public entry ───────────────────────────────────────────────────────────────────────
 
 def orchestrate(task: str, cfg: Settings, cloud: bool = False, verbose: bool = False,
-                force_single: bool = False) -> str:
+                force_single: bool = False, session_context: str = "") -> str:
     """Route a task: single generalist or parallel specialists. Returns final answer."""
     registry = ToolRegistry.default(cfg)
     model = cfg.effective_model(cloud=cloud)
@@ -209,7 +232,7 @@ def orchestrate(task: str, cfg: Settings, cloud: bool = False, verbose: bool = F
         display.start()
         try:
             result = run_agent(preset, sub, registry, cfg, display.handle_event,
-                               cloud, memory_block=mem_block)
+                               cloud, memory_block=mem_block, session_context=session_context)
         finally:
             display.stop()
         _save_run_log(task, model, "single", jobs, time.time() - start)

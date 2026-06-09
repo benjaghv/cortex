@@ -85,6 +85,22 @@ def chat(
         except Exception:
             return []
 
+    def _ollama_help() -> None:
+        console.print()
+        console.print("  [bold #F87171]✗ Can't reach Ollama[/] at "
+                      f"[dim]{cfg.ollama_base_url}[/]")
+        console.print()
+        console.print("  [bold]Fix:[/]")
+        console.print("  [#22D3EE]1.[/] Open a terminal and run:  [bold]ollama serve[/]")
+        console.print("  [#22D3EE]2.[/] Or on Windows: look for the Ollama icon in the system tray")
+        console.print("     and make sure it says 'Running'.")
+        console.print("  [#22D3EE]3.[/] If Ollama isn't installed: [bold]https://ollama.com/download[/]")
+        console.print("  [#22D3EE]4.[/] After starting, pull a model:  [bold]ollama pull qwen2.5-coder:7b[/]")
+        console.print()
+        console.print(f"  [dim]Expected URL: {cfg.ollama_base_url}  "
+                      "(change with CORTEX_OLLAMA_BASE_URL or ~/.cortex/config.toml)[/]")
+        console.print()
+
     def _prompt_label() -> str:
         short = cfg.model.replace("ollama/", "")
         return f"[bold #7C5CFF]▶[/] [dim #22D3EE]{short}[/] "
@@ -98,15 +114,53 @@ def chat(
         # /models — list available
         if slug in ("/models", "/model") and not arg:
             available = _fetch_models()
-            if not available:
-                print_error("Can't reach Ollama.")
+            if not available and not getattr(cfg, "ollama_cloud_api_key", None):
+                _ollama_help()
                 return True
+            # Show table even if local list is empty — cloud section still useful
             local = [{"name": m} for m in available]
             print_models_table(local, cfg=cfg)
             return True
 
         # /model <name|number> — switch
         if slug == "/model" and arg:
+            # ── Cloud model: direct switch, no local lookup needed ──
+            _CLOUD_PREFIXES = ("ollama-cloud/", "moonshot-", "qwen-", "glm-", "openai/")
+            if any(arg.startswith(p) for p in _CLOUD_PREFIXES):
+                cfg.model = arg
+                print_success(f"Switched to {cfg.model}")
+                return True
+
+            # ── Single letter → cloud model by index (a=first, b=second…) ──
+            if len(arg) == 1 and arg.isalpha() and arg.islower():
+                from cortex.display import _CLOUD_PROVIDERS, _is_ollama_cloud_model
+                ordered: list[str] = []
+                for p in _CLOUD_PROVIDERS:
+                    key_val = getattr(cfg, p["key_field"], None)
+                    if not key_val:
+                        continue
+                    if p["label"] == "Ollama Cloud":
+                        # same order as display: hardcoded + local proxy extras
+                        avail_all = _fetch_models()
+                        cloud_px = [m for m in avail_all if _is_ollama_cloud_model(m)]
+                        known = {mn for mn, _ in p["models"]}
+                        for mn, _ in p["models"]:
+                            ordered.append(mn)
+                        for local_name in cloud_px:
+                            cid = f"ollama-cloud/{local_name}"
+                            if cid not in known:
+                                ordered.append(cid)
+                    else:
+                        for mn, _ in p["models"]:
+                            ordered.append(mn)
+                idx = ord(arg) - ord("a")
+                if 0 <= idx < len(ordered):
+                    cfg.model = ordered[idx]
+                    print_success(f"Switched to {cfg.model}")
+                else:
+                    print_error(f"No cloud model '{arg}'. Run /models to see letters.")
+                return True
+
             available = _fetch_models()
             # Try by number
             if arg.isdigit():
@@ -118,12 +172,44 @@ def chat(
                     print_error(f"No model #{arg}. Run /models to list.")
                 return True
             # Fuzzy match by name substring
-            matches = [m for m in available if arg.lower() in m.lower()]
+            from cortex.display import _is_ollama_cloud_model
+            local_only = [m for m in available if not _is_ollama_cloud_model(m)]
+            cloud_proxied = [m for m in available if _is_ollama_cloud_model(m)]
+
+            # Exact local (non-cloud) models first
+            matches = [m for m in local_only if arg.lower() in m.lower()]
             if len(matches) == 1:
                 cfg.model = f"ollama/{matches[0]}"
                 print_success(f"Switched to {cfg.model}")
-            elif len(matches) > 1:
-                print_warning(f"Ambiguous: {', '.join(matches)}. Be more specific.")
+                return True
+            if len(matches) > 1:
+                print_warning(f"Ambiguous local: {', '.join(matches)}. Be more specific.")
+                return True
+
+            # :cloud proxied models from local Ollama
+            cloud_local_matches = [m for m in cloud_proxied if arg.lower() in m.lower()]
+            if len(cloud_local_matches) == 1:
+                cfg.model = f"ollama/{cloud_local_matches[0]}"
+                print_success(f"Switched to {cfg.model}")
+                return True
+            if len(cloud_local_matches) > 1:
+                print_warning(f"Ambiguous cloud: {', '.join(cloud_local_matches)}. Be more specific.")
+                return True
+
+            # Static cloud provider models (Kimi, Qwen, GLM + ollama-cloud/ direct API)
+            from cortex.display import _CLOUD_PROVIDERS
+            all_static = [
+                full_name
+                for provider in _CLOUD_PROVIDERS
+                for full_name, _hint in provider["models"]
+                if full_name  # skip empty
+            ]
+            static_matches = [m for m in all_static if arg.lower() in m.lower()]
+            if len(static_matches) == 1:
+                cfg.model = static_matches[0]
+                print_success(f"Switched to {cfg.model}")
+            elif len(static_matches) > 1:
+                print_warning(f"Ambiguous: {', '.join(static_matches)}. Be more specific.")
             else:
                 print_error(f"No model matching '{arg}'. Run /models to list.")
             return True
@@ -140,7 +226,8 @@ def chat(
             console.print("  [bold #7C5CFF]Commands:[/]")
             console.print("  [#22D3EE]/models[/]          — list Ollama models")
             console.print("  [#22D3EE]/model <name>[/]    — switch model (partial name ok)")
-            console.print("  [#22D3EE]/model <number>[/]  — switch model by number")
+            console.print("  [#22D3EE]/model <number>[/]  — switch local model by number")
+            console.print("  [#22D3EE]/model <letter>[/]  — switch cloud model by letter (a, b, c…)")
             console.print("  [#22D3EE]/verbose[/]         — toggle verbose / clean mode")
             console.print("  [#22D3EE]/dry-run <task>[/]  — plan without executing")
             console.print("  [#22D3EE]exit[/]             — quit")
@@ -161,9 +248,67 @@ def chat(
 
     print_banner(model=cfg.effective_model(cloud=cloud), version=__version__)
     print_info("Type a task or question — /help for commands — exit to quit.")
+
+    # ── Startup check: warn if Ollama unreachable and model is local ──────────
+    _is_local_model = cfg.model.startswith("ollama/") or "/" not in cfg.model
+    if _is_local_model:
+        try:
+            with httpx.Client(timeout=2.0) as c:
+                c.get(f"{cfg.ollama_base_url}/api/tags").raise_for_status()
+        except Exception:
+            _has_cloud_key = bool(getattr(cfg, "ollama_cloud_api_key", None))
+            console.print()
+            console.print("  [bold #FACC15]⚠  Ollama is not running[/]  "
+                          f"[dim]({cfg.ollama_base_url})[/]")
+            if _has_cloud_key:
+                console.print()
+                console.print("  You have an Ollama Cloud API key — use a cloud model instead:")
+                console.print("  [bold]  /model a[/]   [dim]← kimi-k2.6:cloud[/]")
+                console.print("  [bold]  /model b[/]   [dim]← qwen3.5:cloud[/]")
+                console.print("  [bold]  /models[/]    [dim]← see all options[/]")
+            else:
+                console.print("  Fix: open a new terminal →  [bold]ollama serve[/]")
+                console.print("  No Ollama? Download: [bold]https://ollama.com/download[/]")
+                console.print("  Then pull a model: [bold]ollama pull qwen2.5-coder:7b[/]")
+            console.print()
+
     console.print()
 
     from cortex.agent import run as agent_run
+    from rich.text import Text as RichText
+
+    _MAX_SESSION_TURNS = 8
+    _MAX_SESSION_CHARS = 3000
+    session_turns: list[dict] = []   # {task, result} per turn this session
+
+    def _build_session_context() -> str:
+        if not session_turns:
+            return ""
+        lines = ["CURRENT SESSION (this conversation — use to maintain context):"]
+        for i, t in enumerate(session_turns, 1):
+            short_result = t["result"][:200].replace("\n", " ")
+            if len(t["result"]) > 200:
+                short_result += "…"
+            lines.append(f"  [{i}] User: {t['task']}")
+            lines.append(f"       Assistant: {short_result}")
+        return "\n".join(lines)
+
+    def _session_indicator() -> None:
+        if not session_turns:
+            return
+        turns = len(session_turns)
+        total_chars = sum(len(t["task"]) + len(t["result"]) for t in session_turns)
+        ctx_window = 32_000 * 4  # rough chars estimate for 32K token window
+        pct = min(total_chars / ctx_window * 100, 100)
+        filled = int(pct / 5)   # 20 blocks = 100%
+        bar = "█" * filled + "░" * (20 - filled)
+        bar_color = "#4ADE80" if pct < 60 else ("#FACC15" if pct < 85 else "#F87171")
+        console.print(
+            f"  [dim]session[/] [bold]{turns}[/] [dim]turns ·[/] "
+            f"[dim]~{total_chars//1000:.1f}K chars[/]  "
+            f"[{bar_color}]{bar}[/]  [dim]{pct:.0f}%[/]",
+        )
+        console.print()
 
     while True:
         try:
@@ -177,7 +322,14 @@ def chat(
             if task.startswith("/"):
                 _handle_slash(task)
                 continue
-            agent_run(task=task, cfg=cfg, cloud=cloud, dry_run=False, verbose=state["verbose"])
+            ctx = _build_session_context()
+            result = agent_run(task=task, cfg=cfg, cloud=cloud, dry_run=False,
+                               verbose=state["verbose"], session_context=ctx)
+            # Store turn (trim oldest if over limit)
+            session_turns.append({"task": task, "result": result or ""})
+            if len(session_turns) > _MAX_SESSION_TURNS:
+                session_turns.pop(0)
+            _session_indicator()
         except KeyboardInterrupt:
             console.print()
             print_info("Interrupted. 👋")
@@ -186,7 +338,7 @@ def chat(
 
 @app.command()
 def models():
-    """List local Ollama models."""
+    """List local Ollama models + available cloud providers."""
     import httpx
     cfg = Settings.load()
     print_banner(version=__version__)
@@ -196,12 +348,28 @@ def models():
             r.raise_for_status()
             ml = r.json().get("models", [])
         if not ml:
-            print_warning("No models. Pull one: ollama pull qwen3:8b")
+            print_warning("No local models found.")
+            console.print()
+            console.print("  Pull a model first:")
+            console.print("  [bold]  ollama pull qwen2.5-coder:7b[/]   [dim]← recommended[/]")
+            console.print("  [bold]  ollama pull qwen3:8b[/]")
+            console.print("  [bold]  ollama pull deepseek-r1:8b[/]")
+            console.print()
             return
         print_models_table(ml, cfg=cfg)
-        print_info("Use cloud: cortex run -m <model-name> 'your task'")
     except Exception:
-        print_error(f"Can't reach Ollama at {cfg.ollama_base_url}. Start it: ollama serve")
+        console.print()
+        console.print(f"  [bold #F87171]✗ Can't reach Ollama[/] at [dim]{cfg.ollama_base_url}[/]")
+        console.print()
+        console.print("  [bold]Fix:[/]")
+        console.print("  [#22D3EE]1.[/] Open a NEW terminal and run:  [bold]ollama serve[/]")
+        console.print("  [#22D3EE]2.[/] Windows: check Ollama icon in system tray → must say 'Running'")
+        console.print("  [#22D3EE]3.[/] Not installed? Download: [bold]https://ollama.com/download[/]")
+        console.print("  [#22D3EE]4.[/] Then pull a model:  [bold]ollama pull qwen2.5-coder:7b[/]")
+        console.print()
+        console.print(f"  [dim]Config URL: {cfg.ollama_base_url}  "
+                      "(override: CORTEX_OLLAMA_BASE_URL env var)[/]")
+        console.print()
 
 
 @app.command()

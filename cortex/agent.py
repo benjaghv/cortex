@@ -57,7 +57,7 @@ def _dry_run(task: str, cfg: Settings, cloud: bool, display: AgentDisplay) -> st
     return "(dry run — nothing executed)"
 
 def run(task: str, cfg: Settings, cloud: bool = False, dry_run: bool = False,
-        verbose: bool = False, single: bool = False) -> str:
+        verbose: bool = False, single: bool = False, session_context: str = "") -> str:
     try:
         import litellm  # noqa: F401
     except ImportError:
@@ -68,4 +68,5 @@ def run(task: str, cfg: Settings, cloud: bool = False, dry_run: bool = False,
         display.print_task()
         return _dry_run(task, cfg, cloud, display)
 
-    return orchestrate(task, cfg, cloud=cloud, verbose=verbose, force_single=single)
+    return orchestrate(task, cfg, cloud=cloud, verbose=verbose, force_single=single,
+                       session_context=session_context)
