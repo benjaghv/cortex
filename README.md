@@ -1,11 +1,11 @@
 <div align="center">
 
-```
+<pre>
  ___ ___  ___ _____ _____  __
 / __/ _ \| _ \_   _| __\ \/ /
-| (_| (_) |   / | | | _| >  <
+| (_| (_) |   / | | | _| >  &lt;
 \___\___/|_|_\ |_| |___/_/\_\
-```
+</pre>
 
 # cortex
 
@@ -24,24 +24,23 @@ Zero API cost · Full control · Parallel orchestration · Streams every step li
 
 ## How it works
 
-```
-cortex run "get AAPL price and today's weather in Santiago"
-         │
-         ▼
-   ┌─────────────┐
-   │ Orchestrator │  ← one LLM call decides: single or parallel?
-   └──────┬──────┘
-          │  parallel (independent subtasks)
-    ┌─────┴──────┐
-    ▼            ▼
- [data agent]  [data agent]          ← each gets only its relevant tools
- stock: AAPL   weather: Santiago     ← run concurrently via threads
-    │            │
-    └─────┬──────┘
-          ▼
-   ┌─────────────┐
-   │  Synthesizer │  ← combines results into one final answer
-   └─────────────┘
+```mermaid
+flowchart TD
+    A(["`**cortex run** _task_`"]) --> B
+
+    B{Orchestrator\none LLM call}
+    B -->|simple task| C[generalist agent\nall tools]
+    B -->|complex task| D
+
+    subgraph D[" Parallel execution "]
+        direction LR
+        E[coder\nfilesystem · shell · python]
+        F[researcher\nsearch · web · filesystem]
+        G[data\nstock · weather · datetime]
+    end
+
+    C --> H
+    D --> H(["`**Synthesizer**\none final answer`"])
 ```
 
 **Simple task** → one generalist agent handles it.  
