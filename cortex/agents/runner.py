@@ -49,6 +49,45 @@ def _maybe_redirect_to_document(name: str, args: dict, registry: ToolRegistry) -
     return "document", new_args
 
 
+_GIT_ACTION_RE = None  # compiled lazily
+
+
+def _extract_git_commands(content: str) -> "list[str] | None":
+    """Scan model text for git commands it's EXPLAINING instead of executing.
+
+    Matches lines like:
+      git add .
+      git commit -m "msg"
+      git push origin main
+    inside or outside code blocks.
+    Returns list of git arg strings (e.g. ['add .', 'commit -m "msg"', 'push'])
+    or None if no actionable git sequence found.
+    """
+    import re
+    global _GIT_ACTION_RE
+    if _GIT_ACTION_RE is None:
+        _GIT_ACTION_RE = re.compile(
+            r'`{0,3}git\s+((?:add|commit|push|pull|status|stash|checkout|merge|branch|log)[^\n`]{0,200})`{0,3}',
+            re.IGNORECASE,
+        )
+    matches = _GIT_ACTION_RE.findall(content)
+    if not matches:
+        return None
+    # Only intercept if there's at least add+commit or commit+push (real workflow)
+    joined = " ".join(matches).lower()
+    has_commit = "commit" in joined
+    has_push = "push" in joined
+    if not (has_commit or has_push):
+        return None
+    # Clean up each match
+    cmds = []
+    for m in matches:
+        cmd = m.strip().strip("`").strip()
+        if cmd:
+            cmds.append(cmd)
+    return cmds if cmds else None
+
+
 def _extract_text_tool_calls(content: str) -> "list[dict] | None":
     """Parse tool calls embedded in model text (models without native tool_calls support).
 
@@ -184,6 +223,39 @@ def run_agent(
                 messages.append({"role": "user",
                                   "content": "Using the tool results above, answer my "
                                              "original question. Be direct and concise."})
+                force_answer = True
+                continue
+
+            # Intercept: model explained git commands instead of executing them.
+            # Extract and run them now so the user doesn't have to do it manually.
+            git_cmds = _extract_git_commands(msg.content or "")
+            git_exec = sub.executor("git")
+            if git_cmds and git_exec and not force_answer:
+                results = []
+                for git_args in git_cmds:
+                    emit(Event(agent=preset.name, kind="tool_call",
+                               tool="git", args={"args": git_args}))
+                    t0 = time.time()
+                    try:
+                        res = str(git_exec({"args": git_args}))
+                        ok = not res.startswith(_FAIL_PREFIXES)
+                    except Exception as e:
+                        res, ok = f"[ERROR] {type(e).__name__}: {e}", False
+                    emit(Event(agent=preset.name, kind="tool_result",
+                               tool="git", result=res, ok=ok))
+                    steps.append({
+                        "tool": "git", "args": {"args": git_args},
+                        "result_preview": res[:200], "success": ok,
+                        "duration_s": round(time.time() - t0, 2),
+                    })
+                    results.append(f"`git {git_args}`:\n{res}")
+                # Feed results back and get a real summary
+                messages.append({"role": "assistant", "content": msg.content,
+                                  "tool_calls": []})
+                messages.append({"role": "user",
+                                  "content": "Git commands executed. Results:\n"
+                                             + "\n\n".join(results)
+                                             + "\n\nSummarize what was done."})
                 force_answer = True
                 continue
 

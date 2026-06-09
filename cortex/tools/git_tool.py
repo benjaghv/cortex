@@ -29,8 +29,10 @@ SCHEMA = {
                     "type": "string",
                     "description": (
                         "Git subcommand and arguments, without the 'git' prefix. "
+                        "Chain multiple commands with ' && ' to run a full workflow in ONE call. "
                         "Examples: 'status', 'log --oneline -10', 'diff HEAD~1', "
-                        "'add src/main.py', 'commit -m \"fix login bug\"', 'push origin main'."
+                        "'add .', 'commit -m \"fix login bug\"', 'push', "
+                        "'add . && commit -m \"feat: add feature\" && push'."
                     ),
                 },
                 "cwd": {
@@ -97,6 +99,18 @@ def execute(args: str, cwd: str | None = None, **_) -> str:
     args = args.strip()
     if not args:
         return "[ERROR] No git subcommand provided."
+
+    # Support chained commands: "add . && commit -m 'msg' && push"
+    if " && " in args:
+        parts_chain = [p.strip() for p in args.split(" && ") if p.strip()]
+        results = []
+        for cmd in parts_chain:
+            res = execute(cmd, cwd=cwd)
+            results.append(f"$ git {cmd}\n{res}")
+            if res.startswith(("[ERROR]", "[BLOCKED]", "[EXIT", "[TIMEOUT]")):
+                results.append("(chain stopped on error)")
+                break
+        return "\n\n".join(results)
 
     subcommand = args.split()[0].lower().lstrip("-")
 
