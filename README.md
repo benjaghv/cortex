@@ -9,8 +9,6 @@
  ╚═════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝
 </pre>
 
-# cortex
-
 **Local AI agents with tools, in your terminal — powered by Ollama.**
 
 Zero API cost · Full control · Parallel orchestration · Streams every step live

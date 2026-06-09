@@ -142,8 +142,8 @@ def chat(
             console.print("  [#22D3EE]/model <name>[/]    — switch model (partial name ok)")
             console.print("  [#22D3EE]/model <number>[/]  — switch model by number")
             console.print("  [#22D3EE]/verbose[/]         — toggle verbose / clean mode")
-            console.print("  [#22D3EE]/dry-run <tarea>[/] — planear sin ejecutar")
-            console.print("  [#22D3EE]exit[/]             — salir")
+            console.print("  [#22D3EE]/dry-run <task>[/]  — plan without executing")
+            console.print("  [#22D3EE]exit[/]             — quit")
             console.print()
             return True
 

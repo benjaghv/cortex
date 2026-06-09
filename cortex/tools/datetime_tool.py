@@ -20,9 +20,9 @@ SCHEMA = {
     },
 }
 
-_DAYS = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
-_MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio",
-           "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+_DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+_MONTHS = ["January", "February", "March", "April", "May", "June",
+           "July", "August", "September", "October", "November", "December"]
 
 
 def execute() -> str:
@@ -30,9 +30,9 @@ def execute() -> str:
     day = _DAYS[now.weekday()]
     month = _MONTHS[now.month - 1]
     return (
-        f"Fecha y hora actual:\n"
-        f"- {day}, {now.day} de {month} de {now.year}\n"
-        f"- Hora: {now.strftime('%H:%M:%S')}\n"
+        f"Current date and time:\n"
+        f"- {day}, {month} {now.day}, {now.year}\n"
+        f"- Time: {now.strftime('%H:%M:%S')}\n"
         f"- ISO: {now.strftime('%Y-%m-%d %H:%M:%S %z')}\n"
-        f"- Zona horaria: {now.tzname()}"
+        f"- Timezone: {now.tzname()}"
     )

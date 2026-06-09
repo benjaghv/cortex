@@ -67,7 +67,7 @@ def run_agent(
         msg = resp.choices[0].message
 
         if not msg.tool_calls:
-            final = llm.humanize(msg.content or "(sin respuesta)")
+            final = llm.humanize(msg.content or "(no response)")
             emit(Event(agent=preset.name, kind="finished", result=final))
             return final
 

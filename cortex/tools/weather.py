@@ -27,13 +27,13 @@ SCHEMA = {
 
 _HEADERS = {"User-Agent": "cortex/0.1"}
 
-# WMO weather codes → Spanish description
+# WMO weather codes → English description
 _WMO = {
-    0: "despejado", 1: "mayormente despejado", 2: "parcialmente nublado", 3: "nublado",
-    45: "niebla", 48: "niebla con escarcha", 51: "llovizna ligera", 53: "llovizna",
-    55: "llovizna intensa", 61: "lluvia ligera", 63: "lluvia", 65: "lluvia intensa",
-    71: "nieve ligera", 73: "nieve", 75: "nieve intensa", 80: "chubascos ligeros",
-    81: "chubascos", 82: "chubascos violentos", 95: "tormenta", 96: "tormenta con granizo",
+    0: "clear sky", 1: "mainly clear", 2: "partly cloudy", 3: "overcast",
+    45: "fog", 48: "freezing fog", 51: "light drizzle", 53: "drizzle",
+    55: "heavy drizzle", 61: "light rain", 63: "rain", 65: "heavy rain",
+    71: "light snow", 73: "snow", 75: "heavy snow", 80: "light showers",
+    81: "showers", 82: "violent showers", 95: "thunderstorm", 96: "thunderstorm with hail",
 }
 
 
@@ -49,7 +49,7 @@ def execute(city: str) -> str:
         return f"[ERROR] Geocoding failed: {e}"
 
     if not results:
-        return f"[ERROR] No encontré la ciudad '{city}'."
+        return f"[ERROR] City '{city}' not found."
 
     loc = results[0]
     lat, lon = loc["latitude"], loc["longitude"]
@@ -75,15 +75,15 @@ def execute(city: str) -> str:
     desc = _WMO.get(code, "desconocido")
 
     lines = [
-        f"**Clima en {name}, {country}**",
-        f"- Ahora: {cur.get('temperature_2m')}°C, {desc}",
-        f"- Humedad: {cur.get('relative_humidity_2m')}%  ·  Viento: {cur.get('wind_speed_10m')} km/h",
+        f"**Weather in {name}, {country}**",
+        f"- Now: {cur.get('temperature_2m')}°C, {desc}",
+        f"- Humidity: {cur.get('relative_humidity_2m')}%  ·  Wind: {cur.get('wind_speed_10m')} km/h",
     ]
 
     daily = data.get("daily", {})
     dates = daily.get("time", [])
     if dates:
-        lines.append("- Próximos días:")
+        lines.append("- Forecast:")
         for i, d in enumerate(dates[:3]):
             dcode = _WMO.get(daily["weather_code"][i], "?")
             tmax = daily["temperature_2m_max"][i]

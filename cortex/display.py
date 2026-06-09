@@ -120,16 +120,23 @@ def _clean_label(tool: str, args: dict) -> tuple[str, str, str]:
 
 # ── Banner ────────────────────────────────────────────────────────────────────────
 
-BANNER = r"""
-   ___ ___  ___ _____ _____  __
-  / __/ _ \| _ \_   _| __\ \/ /
- | (_| (_) |   / | | | _| >  <
-  \___\___/|_|_\ |_| |___/_/\_\
-"""
+_BANNER_LINES = [
+    "██████╗ ██████╗ ██████╗ ████████╗███████╗██╗  ██╗",
+    "██╔════╝██╔═══██╗██╔══██╗╚══██╔══╝██╔════╝╚██╗██╔╝",
+    "██║     ██║   ██║██████╔╝   ██║   █████╗   ╚███╔╝ ",
+    "██║     ██║   ██║██╔══██╗   ██║   ██╔══╝   ██╔██╗ ",
+    "╚██████╗╚██████╔╝██║  ██║   ██║   ███████╗██╔╝ ██╗",
+    " ╚═════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝╚═╝  ╚═╝",
+]
+# Fade top→bottom: light violet → brand violet
+_BANNER_COLORS = ["#9B7FFF", "#8B6FFF", "#7C5CFF", "#7C5CFF", "#6B4EEE", "#5A3DDD"]
 
 
 def print_banner(model: str = "", version: str = "0.1.0") -> None:
-    console.print(Text(BANNER, style="#7C5CFF"), justify="center")
+    console.print()
+    for line, color in zip(_BANNER_LINES, _BANNER_COLORS):
+        console.print(Text(line, style=f"bold {color}"), justify="center")
+    console.print()
     bits = [("local AI agents  ", "dim white"), ("v" + version, "#7C5CFF")]
     if model:
         bits += [("  ·  ", "dim white"), (model, "bold #22D3EE")]
@@ -280,7 +287,7 @@ class AgentDisplay:
             else:
                 self.tool_error(ev.tool, ev.result or "")
         elif kind == "finished":
-            self.final_answer(ev.result or "(sin respuesta)")
+            self.final_answer(ev.result or "(no response)")
         elif kind == "error":
             self.tool_error(ev.tool or "agent", ev.result or "error")
         # "started" → nothing; the task panel is already printed.

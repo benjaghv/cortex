@@ -44,8 +44,8 @@ def execute(code: str) -> str:
             return f"[ERROR] Python exited {r.returncode}:\n{err or out}"
         if not out and err:
             return f"(stderr)\n{err}"
-        return out or "(sin salida — recuerda usar print())"
+        return out or "(no output — make sure to use print())"
     except subprocess.TimeoutExpired:
-        return f"[TIMEOUT] El código excedió {_TIMEOUT}s."
+        return f"[TIMEOUT] Code exceeded {_TIMEOUT}s."
     except Exception as e:
         return f"[ERROR] {type(e).__name__}: {e}"

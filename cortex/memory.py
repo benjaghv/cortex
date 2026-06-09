@@ -65,7 +65,7 @@ def as_prompt_block(n: int = 5) -> str:
     lines = ["PAST SESSION MEMORY (recent context — use if relevant to the current task):"]
     for it in items:
         when = it.get("ts", "")[:10]
-        lines.append(f"- [{when}] Tarea: {it.get('task','')} → {it.get('result','')}")
+        lines.append(f"- [{when}] Task: {it.get('task','')} → {it.get('result','')}")
     return "\n".join(lines)
 
 
