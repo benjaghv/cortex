@@ -221,7 +221,7 @@ Each agent only sees its assigned tools — no accidental cross-contamination.
 | `document` | Create formatted Word (.docx) or plain text files with headings, bullets, bold | No* |
 
 > \* `browser` requires Playwright: `pip install playwright && playwright install chromium`
-> \* `document` (.docx) requires python-docx: `pip install python-docx` (falls back to .txt if missing)
+> `document` (.docx) is included — no extra install needed.
 
 ---
 
