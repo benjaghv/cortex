@@ -65,6 +65,7 @@ _VERBS = {
     ("filesystem", "list"):   ("LIST",    "≣", "info"),
     ("filesystem", "search"): ("SEARCH",  "⌕", "info"),
     ("shell", None):          ("RUN",     "»", "tool.name"),
+    ("git",   None):          ("GIT",     "⎇", "tool.name"),
     ("web", None):            ("FETCH",   "↯", "info"),
     ("browser", "fetch"):     ("BROWSE",  "🌐", "info"),
     ("browser", "search"):    ("BROWSE",  "🌐", "info"),

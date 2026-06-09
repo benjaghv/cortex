@@ -158,8 +158,9 @@ cortex version           Show version
 | Agent | Tools | Best for |
 |---|---|---|
 | **generalist** | all tools | simple or ambiguous tasks — default fallback |
-| **coder** | filesystem, shell, python_exec | files, scripts, code |
-| **researcher** | search, web, filesystem | web search, URL fetching, docs |
+| **coder** | filesystem, shell, git, python_exec | files, scripts, code, git ops |
+| **devops** | git, shell, filesystem, python_exec | repo management, commits, diffs |
+| **researcher** | search, web, browser, filesystem | web search, URL fetching, JS-heavy sites, job boards |
 | **data** | stock, weather, datetime, python_exec | live prices, weather, date math |
 
 Each agent only sees its assigned tools — no accidental cross-contamination.
@@ -172,12 +173,16 @@ Each agent only sees its assigned tools — no accidental cross-contamination.
 |---|---|---|
 | `filesystem` | Read, write, list, search, create folders | No |
 | `shell` | Run allowed shell commands | No |
-| `web` | Fetch a URL and extract its text | No |
+| `git` | status, diff, log, branch, add, commit, push, pull, stash… | No |
+| `web` | Fetch a URL, strip HTML, return plain text | No |
+| `browser` | Real headless browser (Playwright) — JS sites, job boards, SPAs | No* |
 | `search` | DuckDuckGo web search | No |
 | `stock` | Real-time stock and crypto quotes | No |
 | `weather` | Current weather + forecast for any city | No |
 | `datetime` | Current local date and time | No |
 | `python_exec` | Run a Python snippet, capture output | No |
+
+> \* `browser` requires Playwright: `pip install playwright && playwright install chromium`
 
 ---
 
@@ -213,22 +218,70 @@ cortex/
 
 ## Cloud providers (optional)
 
-Works 100% locally out of the box. Add a key to `~/.cortex/config.toml` to unlock cloud models.
+Works 100% locally out of the box. Add a key to `~/.cortex/config.toml` to unlock cloud models — no local GPU needed.
 
 ```bash
 cortex models   # shows ● configured  ○ not configured
 ```
 
+### Ollama Cloud (recommended — same API key, many models)
+
+**1. Get your API key**
+
+Go to **[ollama.com](https://ollama.com)** → sign in → **Settings → API Keys** → create a key.  
+Looks like: `93fb7deb...njdgOCDY_kbMXRqeOw4XEA3T`
+
+**2. Add it to your config**
+
+```bash
+cortex config --init   # creates ~/.cortex/config.toml if it doesn't exist
+```
+
+Open `~/.cortex/config.toml` and add:
+
+```toml
+ollama_cloud_api_key = "your-key-here"
+```
+
+**3. Use a cloud model**
+
+```bash
+cortex chat
+/model a        # switch to first cloud model (kimi-k2.6:cloud)
+/models         # see all available cloud models with letters a, b, c…
+```
+
+Or directly:
+
+```bash
+cortex run -m "ollama-cloud/kimi-k2.6:cloud" "your task"
+```
+
+**Available Ollama Cloud models** (free unless noted):
+
+| Letter | Model | Notes |
+|---|---|---|
+| a | `kimi-k2.6:cloud` | 595B · Kimi |
+| b | `qwen3.5:cloud` | Qwen 3.5 |
+| c | `glm-5.1:cloud` | GLM 5.1 |
+| d | `minimax-m3:cloud` | MiniMax M3 |
+| e | `nemotron-3-super:cloud` | NVIDIA Nemotron |
+| f | `gemma4:31b-cloud` | Google Gemma 4 · 31B |
+| g | `gemma3:4b` | fast |
+| h | `gemma3:27b` | better |
+| i | `qwen3-coder-next` | coding |
+
+> **Tip:** if Ollama is not installed or not running, cortex detects it at startup and suggests switching to a cloud model automatically.
+
+---
+
+### Other providers (optional)
+
 | Provider | Config key | Example model |
 |---|---|---|
-| [Ollama Cloud](https://ollama.com) | `ollama_cloud_api_key` | `ollama-cloud/gemma3:4b` |
 | [Kimi / Moonshot](https://platform.moonshot.cn) | `kimi_api_key` | `moonshot-v1-128k` |
 | [Qwen / Alibaba](https://dashscope.aliyuncs.com) | `qwen_api_key` | `qwen-plus` |
 | [GLM / Zhipu](https://open.bigmodel.cn) | `glm_api_key` | `glm-4-plus` |
-
-```bash
-cortex run -m "ollama-cloud/gemma3:4b" "your task"
-```
 
 See `config.example.toml` for the full config reference.
 

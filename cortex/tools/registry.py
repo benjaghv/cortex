@@ -20,6 +20,7 @@ from cortex.tools import (
     browser,
     datetime_tool,
     filesystem,
+    git_tool,
     python_exec,
     search,
     shell,
@@ -42,7 +43,8 @@ def _default_entries(cfg: Settings) -> dict[str, ToolEntry]:
     """Build the full set of built-in tools. One place to register a new tool."""
     raw: list[tuple[str, dict, Executor]] = [
         ("filesystem", filesystem.SCHEMA, lambda a: filesystem.execute(**a)),
-        ("shell", shell.SCHEMA, lambda a: shell.execute(settings=cfg, **a)),
+        ("shell",      shell.SCHEMA,      lambda a: shell.execute(settings=cfg, **a)),
+        ("git",        git_tool.SCHEMA,   lambda a: git_tool.execute(**a)),
         ("web", web.SCHEMA, lambda a: web.execute(**a)),
         ("browser", browser.SCHEMA, lambda a: browser.execute(**a)),
         ("search", search.SCHEMA, lambda a: search.execute(**a)),

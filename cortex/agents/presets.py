@@ -15,7 +15,13 @@ from cortex.agents.prompt_base import build_system_prompt
 # Tool descriptions, reused to build each preset's TOOLS block.
 _TOOL_DESC = {
     "filesystem": "filesystem: read/write files, create folders (mkdir), list/search local files",
-    "shell": "shell: local commands (git, dir) — Windows only, no bash/grep/curl",
+    "shell": "shell: local commands (dir, etc.) — Windows only, no bash/grep/curl",
+    "git": (
+        "git: run git operations — status, diff, log, branch, add, commit, push, pull, "
+        "checkout, stash, show, blame, remote, fetch, merge. "
+        "Destructive ops (--force, reset --hard) are blocked. "
+        "Always run 'git status' first to understand the repo state."
+    ),
     "python_exec": "python_exec: run Python → math, calculations, data processing (don't guess numbers)",
     "search": "search: DuckDuckGo web search → news, docs, general internet info",
     "web": "web: fetch a specific URL as plain text → fast, no JavaScript",
@@ -30,7 +36,7 @@ _TOOL_DESC = {
     "datetime": "datetime: current date/time → date, time, day of week, time-relative questions",
 }
 
-_ALL_TOOLS = tuple(_TOOL_DESC.keys())
+_ALL_TOOLS = tuple(_TOOL_DESC.keys())  # includes git, browser, all tools
 _BROWSER_RULE = (
     "- Use 'browser' for job boards, LinkedIn, Indeed, Trabajando.cl, or any site "
     "that requires JavaScript. Construct search URLs with query params when possible "
@@ -62,12 +68,13 @@ def _register(preset: AgentPreset) -> None:
 
 _register(_make(
     name="coder",
-    description="Reads/writes code and files, runs shell commands and Python scripts.",
-    role_intro="You are cortex's coding specialist. You work with local files, the shell, and Python.",
-    tools=("filesystem", "shell", "python_exec"),
+    description="Reads/writes code and files, runs shell commands, Python scripts, and git operations.",
+    role_intro="You are cortex's coding specialist. You work with local files, the shell, Python, and git.",
+    tools=("filesystem", "shell", "git", "python_exec"),
     role_rules=(
         "- Stay on the coding/files/scripts task you were given; do not browse the web.\n"
-        "- Prefer filesystem over shell for reading/writing files."
+        "- Prefer filesystem over shell for reading/writing files.\n"
+        "- For any git task: run git(args='status') first to understand current repo state."
     ),
 ))
 
@@ -97,6 +104,19 @@ _register(_make(
     role_rules=(
         "- Stock prices → 'stock' (Nvidia=NVDA, Apple=AAPL, Tesla=TSLA). Weather → 'weather'.\n"
         "- Use 'python_exec' for any arithmetic; never guess numbers."
+    ),
+))
+
+_register(_make(
+    name="devops",
+    description="Git workflows, shell commands, repo inspection, and file operations.",
+    role_intro="You are cortex's devops specialist. You manage repos, run commands, and inspect project state.",
+    tools=("git", "shell", "filesystem", "python_exec"),
+    role_rules=(
+        "- Always run git(args='status') before any git write operation.\n"
+        "- Summarize git log/diff output — don't dump raw output unless asked.\n"
+        "- For commits: verify staged files with git(args='diff --cached') before committing.\n"
+        "- Never use --force, reset --hard, or other destructive ops without explicit user instruction."
     ),
 ))
 
