@@ -19,6 +19,14 @@ direct_answer_enabled = true   # answer pure questions directly, no agent/tools
 # Used by `cortex voice` and the /voice chat command. Needs: pip install ".[voice]"
 voice_language = "es-ES"       # e.g. es-ES, en-US
 
+# ── Integrations: Google / Gmail ─────────────────────────────────────────────
+# Read-only Gmail for agents. Needs: pip install ".[google]"
+# One-time setup: create a Google Cloud project, enable the Gmail API, make a
+# "Desktop app" OAuth client, then: cortex connect gmail --client-secret <path>
+# google_client_secret_path = "C:/path/to/client_secret.json"   # optional, else ~/.cortex/credentials/
+gmail_enabled = true
+gmail_scopes = ["https://www.googleapis.com/auth/gmail.readonly"]
+
 # ── Memory ──────────────────────────────────────────────────────────────────
 memory_enabled = true
 memory_recall = 5

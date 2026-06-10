@@ -295,6 +295,36 @@ def chat(
             print_info(f"Verbose {'ON — showing every step' if state['verbose'] else 'OFF — clean mode'}")
             return True
 
+        # /connect [gmail] [path/to/client_secret.json] — OAuth a Google account in-session
+        if slug == "/connect":
+            cargs = arg.split()
+            service = cargs[0] if cargs else "gmail"
+            secret = next((a for a in cargs[1:] if a.endswith(".json") or "/" in a or "\\" in a), None)
+            _run_connect(cfg, service, secret)
+            return True
+
+        # /account [email] — show or switch the active Google account
+        if slug in ("/account", "/accounts"):
+            from cortex.integrations import google_auth
+            if arg:
+                try:
+                    google_auth.set_active(arg)
+                    print_success(f"Cuenta activa → {arg}")
+                except google_auth.GoogleAuthError as e:
+                    print_error(str(e))
+                return True
+            accs = google_auth.list_accounts()
+            active = google_auth.active_account()
+            if not accs:
+                print_info("No hay cuentas conectadas. Conéctate con:  cortex connect gmail")
+                return True
+            console.print()
+            for a in accs:
+                mark = "  [bold #4ADE80]← activa[/]" if a == active else ""
+                console.print(f"    [#22D3EE]•[/] {a}{mark}")
+            console.print("  [dim]Cambiar: /account <email>[/]\n")
+            return True
+
         # /help
         if slug in ("/help", "/?"):
             console.print()
@@ -307,6 +337,8 @@ def chat(
             console.print("  [#22D3EE]/repo[/]            — show current repo path")
             console.print("  [#22D3EE]/verbose[/]         — toggle verbose / clean mode")
             console.print("  [#22D3EE]/voice[/]           — dictate your next prompt by speaking")
+            console.print("  [#22D3EE]/connect gmail[/]   — connect a Gmail account (browser OAuth)")
+            console.print("  [#22D3EE]/account [email][/] — show or switch active Google account")
             console.print("  [#22D3EE]/dry-run <task>[/]  — plan without executing")
             console.print("  [#22D3EE]exit[/]             — quit")
             console.print()
@@ -400,6 +432,18 @@ def chat(
             if task.lower() in ("exit", "quit", "q"):
                 print_info("Bye. 👋")
                 break
+            # Typed a terminal command (e.g. "cortex connect gmail") inside the chat?
+            # Rewrite to the slash form so it runs here instead of going to the agent.
+            if task.lower().startswith("cortex "):
+                rest = task[len("cortex "):].strip()
+                first = rest.split()[0].lower() if rest else ""
+                _SLASHABLE = {"connect", "account", "accounts", "models", "model", "voice"}
+                if first in _SLASHABLE:
+                    task = "/" + rest
+                else:
+                    print_warning(f"'cortex {rest}' es un comando de terminal — sal del chat (exit) "
+                                  "y córrelo ahí, o usa los slash-commands (/help).")
+                    continue
             if task.startswith("/"):
                 # /voice → dictate a prompt by speaking, then run it as a task.
                 if task.lower().split()[0] == "/voice":
@@ -578,6 +622,297 @@ def config(
     print_info(f"Config file: {CONFIG_FILE}")
     print_info(f"Run logs:    {RUNS_DIR}")
     print_info("--init to create config, --show to print it.")
+
+
+def _print_gmail_setup_guide() -> None:
+    """Clear, in-terminal first-time guide shown when there's no OAuth client yet."""
+    from rich.panel import Panel
+    from rich.text import Text
+    from cortex.config import CREDENTIALS_DIR
+
+    creds_dir = str(CREDENTIALS_DIR)
+    t = Text()
+    t.append("Para leer tu Gmail, Google pide un permiso OAuth. Se hace ", "white")
+    t.append("UNA sola vez", "bold #FACC15")
+    t.append(".\n", "white")
+    t.append("⚠ HAZ TODO EN EL MISMO PROYECTO", "bold #FACC15")
+    t.append(" — mira el selector de proyecto arriba-izquierda y no lo cambies.\n\n", "white")
+
+    def step(n: str, *parts):
+        t.append(f"  {n}  ", "bold #22D3EE")
+        for txt, st in parts:
+            t.append(txt, st)
+        t.append("\n")
+
+    step("1.", ("Abre ", "white"), ("https://console.cloud.google.com", "#7C5CFF"),
+         ("  y crea o elige ", "white"), ("UN proyecto", "bold"), (".", "white"))
+    step("2.", ("Te abro la pestaña ", "white"), ("Clientes", "bold"),
+         (" → ", "white"), ("Crear cliente de OAuth", "bold"),
+         (" → tipo ", "white"), ("App de escritorio", "bold #4ADE80"),
+         (" → ", "white"), ("Descargar JSON", "bold"), (".", "white"))
+    t.append("       (Si pide configurar la pantalla de consentimiento: Branding → nombre + tu correo.)\n",
+             "dim white")
+    step("3.", ("Guarda ese JSON en esta carpeta (o en Descargas):", "white"))
+    t.append(f"         {creds_dir}\n", "bold #4ADE80")
+    t.append("       En cuanto aparezca ", "dim white")
+    t.append("lo detecto solo", "bold #4ADE80")
+    t.append(" y te abro las pestañas exactas para habilitar la API\n", "dim white")
+    t.append("       y agregarte como usuario de prueba. Quedará en modo ", "dim white")
+    t.append("Prueba", "bold dim white")
+    t.append(" (el acceso se renueva cada ~7 días). ✅", "dim white")
+
+    console.print()
+    console.print(Panel(t, title=Text("Conectar Gmail — configuración inicial (una vez)", style="#7C5CFF"),
+                        border_style="#7C5CFF", padding=(1, 2)))
+    console.print()
+
+
+def _guided_gmail_setup(cfg) -> None:
+    """Open the Google Cloud pages and watch the credentials folder for the JSON.
+
+    The only manual part is clicking through the console (it needs the user's Google
+    login). Cortex opens the right pages and auto-detects the file the moment it lands,
+    then continues to the OAuth sign-in — no paths to copy, no commands to re-run.
+    """
+    import sys
+    import time
+    import webbrowser
+
+    from rich.text import Text
+
+    from cortex.config import CREDENTIALS_DIR
+    from cortex.integrations import google_auth
+
+    _print_gmail_setup_guide()
+
+    if not sys.stdin.isatty():  # non-interactive → don't hang waiting
+        return
+    try:
+        ans = Prompt.ask("  ¿Abro las páginas de Google Cloud y espero el archivo por ti?",
+                         choices=["s", "n"], default="s")
+    except Exception:
+        return
+    if ans.strip().lower() != "s":
+        return
+
+    # First, only the Clients page so they create the Desktop OAuth client.
+    try:
+        webbrowser.open("https://console.cloud.google.com/auth/clients")
+    except Exception:
+        pass
+
+    console.print(f"\n  [dim]Cuando descargues el JSON, déjalo en[/] [bold]{CREDENTIALS_DIR}[/] "
+                  "[dim](o en Descargas).[/]")
+    console.print("  [dim]Lo detecto solo. Ctrl+C para cancelar.[/]\n")
+
+    found = None
+    try:
+        with console.status(Text("Vigilando… esperando el client_secret.json", style="agent.think"),
+                            spinner="dots", spinner_style="#7C5CFF"):
+            for _ in range(150):  # ~5 min at 2s intervals
+                found = google_auth._autodiscover_client_secret()
+                if found:
+                    break
+                time.sleep(2)
+    except KeyboardInterrupt:
+        console.print("\n  [dim]Cancelado. Cuando tengas el archivo, corre de nuevo:[/] "
+                      "[bold]cortex connect gmail[/]\n")
+        return
+
+    if not found:
+        console.print("  [dim]No detecté el archivo a tiempo. Déjalo en la carpeta y corre de nuevo:[/] "
+                      "[bold]cortex connect gmail[/]\n")
+        return
+
+    # cortex now knows the project from the JSON → open the EXACT per-project pages,
+    # eliminating the "which project am I in?" confusion.
+    pid = google_auth.project_id_of(found)
+    print_success(f"Detecté el cliente del proyecto '{pid or '?'}'.")
+    if pid:
+        api_url = f"https://console.cloud.google.com/apis/library/gmail.googleapis.com?project={pid}"
+        users_url = f"https://console.cloud.google.com/auth/audience?project={pid}"
+        for url in (api_url, users_url):
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
+        console.print(f"\n  Te abrí 2 pestañas del proyecto [bold]{pid}[/]. Haz esto y vuelve:")
+        console.print("    [#22D3EE]1.[/] En [bold]Gmail API[/] → clic [bold]Habilitar[/].")
+        console.print("    [#22D3EE]2.[/] En [bold]Público → Usuarios de prueba[/] → agrega tu correo de Gmail.")
+        console.print(f"       [dim]API:[/] {api_url}")
+        console.print(f"       [dim]Testers:[/] {users_url}\n")
+        try:
+            Prompt.ask("  Cuando hayas hecho ambas, presiona Enter para conectar", default="")
+        except Exception:
+            pass
+
+    _run_connect(cfg, "gmail", str(found))
+
+
+def _run_connect(cfg, service: str, client_secret: "str | None") -> None:
+    """Shared connect flow used by `cortex connect` and the chat /connect command."""
+    if service.lower() not in ("gmail", "google"):
+        print_error(f"Servicio '{service}' no soportado todavía. Disponible: gmail")
+        return
+    from cortex.integrations import google_auth
+    # No OAuth client anywhere yet → launch the guided assistant (open pages + watch).
+    if (not client_secret and not google_auth.client_secret_path(cfg)
+            and not google_auth._autodiscover_client_secret()):
+        _guided_gmail_setup(cfg)
+        return
+    try:
+        console.print("\n  [dim]Abriendo el navegador… elige tu cuenta de Google y acepta.[/]\n")
+        email = google_auth.connect(cfg, client_secret_src=client_secret)
+        print_success(f"Conectado: {email}  (cuenta activa)")
+        console.print("  [dim]Token guardado en ~/.cortex/credentials/ — nunca se commitea.[/]")
+        console.print("  [dim]Prueba:[/] [bold]resume mis últimos correos sin leer[/]\n")
+    except google_auth.MissingDepsError as e:
+        print_error(str(e))
+    except google_auth.MissingClientSecretError:
+        _print_gmail_setup_guide()
+    except google_auth.GoogleAuthError as e:
+        print_error(str(e))
+    except Exception as e:
+        msg = str(e)
+        # Most common post-auth failure: the Gmail API isn't enabled in that project.
+        if "accessNotConfigured" in msg or "has not been used in project" in msg:
+            pid = google_auth.project_id_of(client_secret or google_auth.client_secret_path(cfg))
+            url = (f"https://console.cloud.google.com/apis/library/gmail.googleapis.com?project={pid}"
+                   if pid else "https://console.cloud.google.com/apis/library/gmail.googleapis.com")
+            console.print(f"\n  [bold #F87171]✗ La Gmail API no está habilitada[/] en el proyecto "
+                          f"[bold]{pid or '?'}[/].")
+            console.print(f"  Habilítala aquí → [bold]{url}[/]")
+            console.print("  Clic [bold]Habilitar[/], espera 1-2 min y corre de nuevo "
+                          "[bold]cortex connect gmail[/].\n")
+        else:
+            print_error(f"{type(e).__name__}: {e}")
+
+
+@app.command()
+def connect(
+    service: str = typer.Argument("gmail", help="Service to connect (gmail / google)."),
+    client_secret: Optional[str] = typer.Option(
+        None, "--client-secret", "-c",
+        help="Path to your Google Cloud OAuth client_secret.json (first time only)."),
+):
+    """Connect a third-party account (opens your browser). Persistent + switchable."""
+    cfg = Settings.load()
+    print_banner(version=__version__)
+    _run_connect(cfg, service, client_secret)
+
+
+@app.command()
+def accounts(
+    use: Optional[str] = typer.Option(None, "--use", "-u", help="Switch the active account to this email."),
+):
+    """List connected accounts (or switch the active one with --use <email>)."""
+    from cortex.integrations import google_auth
+    print_banner(version=__version__)
+    if use:
+        try:
+            google_auth.set_active(use)
+            print_success(f"Cuenta activa → {use}")
+        except google_auth.GoogleAuthError as e:
+            print_error(str(e))
+        return
+
+    accs = google_auth.list_accounts()
+    active = google_auth.active_account()
+    console.print()
+    if not accs:
+        console.print("  [dim]No hay cuentas conectadas.[/]  Conecta una con:  [bold]cortex connect gmail[/]\n")
+        return
+    console.print("  [bold #7C5CFF]Cuentas de Google conectadas[/]")
+    for a in accs:
+        mark = "  [bold #4ADE80]← activa[/]" if a == active else ""
+        console.print(f"    [#22D3EE]•[/] {a}{mark}")
+    console.print("\n  [dim]Cambiar:[/] [bold]cortex accounts --use <email>[/]  ·  "
+                  "[dim]quitar:[/] [bold]cortex disconnect gmail <email>[/]\n")
+
+
+@app.command()
+def disconnect(
+    service: str = typer.Argument("gmail", help="Service (gmail / google)."),
+    email: Optional[str] = typer.Argument(None, help="Account to remove (default: active)."),
+):
+    """Disconnect a connected account (deletes its local token)."""
+    from cortex.integrations import google_auth
+    if service.lower() not in ("gmail", "google"):
+        print_error(f"Servicio '{service}' no soportado.")
+        return
+    target = email or google_auth.active_account()
+    if not target:
+        print_warning("No hay ninguna cuenta conectada.")
+        return
+    if google_auth.disconnect(target):
+        print_success(f"Desconectada: {target}")
+    else:
+        print_warning(f"La cuenta '{target}' no estaba conectada.")
+
+
+# (label, import name, pip packages to install if missing, system-lib note)
+_TOOL_DEPS = [
+    ("Word .docx  (document)",      "docx",               [],            ""),
+    ("PowerPoint .pptx  (pptx)",    "pptx",               [],            ""),
+    ("Gmail  (gmail)",              "googleapiclient",    [],            ""),
+    ("Voice transcription",         "speech_recognition", [],            ""),
+    ("Voice microphone  (pyaudio)", "pyaudio",            ["pyaudio"],
+     "Mac: brew install portaudio  ·  Linux: sudo apt install portaudio19-dev"),
+    ("Headless browser  (browser)", "playwright",         ["playwright"],
+     "after install, downloads Chromium automatically"),
+]
+
+
+@app.command()
+def setup(
+    install: bool = typer.Option(False, "--install", "-i", help="Install any missing tool dependencies."),
+):
+    """Check every tool's dependencies on this device — with --install, install the missing ones."""
+    import importlib.util
+    import subprocess
+    import sys
+
+    print_banner(version=__version__)
+    console.print()
+    console.print("  [bold #7C5CFF]Tool dependencies[/]\n")
+
+    missing_pkgs: list[str] = []
+    need_playwright = False
+    all_ok = True
+    for label, mod, pkgs, note in _TOOL_DEPS:
+        ok = importlib.util.find_spec(mod) is not None
+        mark = "[#4ADE80]✓[/]" if ok else "[#F87171]✗[/]"
+        hint = "" if ok or not note else f"  [dim]{note}[/]"
+        console.print(f"    {mark}  {label}{hint}")
+        if not ok:
+            all_ok = False
+            missing_pkgs += pkgs
+            if mod == "playwright":
+                need_playwright = True
+    console.print()
+
+    if all_ok:
+        print_success("Todo listo — cada herramienta tiene sus dependencias en este equipo.")
+        return
+
+    if not install:
+        console.print("  Instala lo que falta con:  [bold]cortex setup --install[/]\n")
+        return
+
+    if missing_pkgs:
+        console.print(f"  [dim]pip install {' '.join(missing_pkgs)}[/]")
+        r = subprocess.run([sys.executable, "-m", "pip", "install", *missing_pkgs])
+        if r.returncode != 0:
+            print_error("pip falló. Si es por SSL/certificados, reintenta con: "
+                        f"{sys.executable} -m pip install --use-feature=truststore {' '.join(missing_pkgs)}")
+            print_warning("Si pyaudio falla, instala PortAudio primero (ver la nota de arriba).")
+
+    if need_playwright and importlib.util.find_spec("playwright") is not None:
+        console.print("  [dim]playwright install chromium[/]")
+        subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"])
+
+    console.print()
+    print_info("Listo. Corre [bold]cortex setup[/] de nuevo para confirmar el estado.")
 
 
 @app.command()

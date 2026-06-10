@@ -71,14 +71,18 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-**Optional extras** (install only what you need):
+That single install makes **every tool work out of the box** — Word/`.docx`, PowerPoint/`.pptx`,
+Gmail, and voice transcription are all included. The only two extras that need a system-level piece
+pip can't provide are the **microphone** (PortAudio) and the **headless browser** (Chromium download).
+Prepare any device for those with one command:
 
 ```bash
-pip install -e ".[pptx]"      # PowerPoint generation (pptx tool)
-pip install -e ".[voice]"     # voice dictation (cortex voice / /voice)
-pip install -e ".[browser]"   # headless browser (then: playwright install chromium)
-pip install -e ".[all]"       # everything above + dev tools
+cortex setup            # check which tool deps are present on this device
+cortex setup --install  # install the missing ones (mic + browser)
 ```
+
+> On Mac/Linux the microphone needs PortAudio first: `brew install portaudio` (Mac) or
+> `sudo apt install portaudio19-dev` (Linux). `cortex setup` tells you if it's missing.
 
 ---
 
@@ -169,12 +173,14 @@ cortex chat
 | `/repo` | show current active repo path |
 | `/verbose` | toggle verbose mode |
 | `/voice` | dictate your next prompt by speaking |
+| `/account [email]` | show or switch the active Google account |
 | `/dry-run <task>` | plan without executing |
 | `exit` | quit |
 
 ### Voice (dictation)
 
-Talk to cortex instead of typing. Needs the voice extra: `pip install ".[voice]"`.
+Talk to cortex instead of typing. Transcription ships with the base install; microphone capture
+needs PortAudio — run `cortex setup --install` (and `brew install portaudio` first on Mac).
 
 ```bash
 cortex voice                  # speak one task, cortex transcribes and runs it
@@ -201,6 +207,10 @@ cortex run -m ollama/qwen3:8b "task"  # override model for this run
 cortex run "task"        Run a task (auto-orchestrates agents)
 cortex chat              Interactive multi-task session
 cortex voice             Speak a task instead of typing it (dictation)
+cortex connect gmail     Connect a Gmail account (OAuth, persistent)
+cortex accounts          List connected accounts · --use <email> to switch
+cortex disconnect gmail  Remove a connected account
+cortex setup             Check tool deps · --install to add missing ones
 cortex agents            List all agent presets and their tools
 cortex models            List local + cloud models
 cortex history           Show recent run history
@@ -222,6 +232,7 @@ cortex version           Show version
 | **devops** | git, shell, filesystem, python_exec | repo management, commits, diffs |
 | **researcher** | search, web, browser, filesystem | web search, URL fetching, JS-heavy sites, job boards |
 | **data** | stock, weather, datetime, python_exec | live prices, weather, date math |
+| **comms** | gmail, search, web | reading + summarizing email, lookups |
 
 Each agent only sees its assigned tools — no accidental cross-contamination.
 
@@ -243,10 +254,11 @@ Each agent only sees its assigned tools — no accidental cross-contamination.
 | `python_exec` | Run a Python snippet, capture output | No |
 | `document` | Create formatted Word (.docx) or plain text files with headings, bullets, bold | No* |
 | `pptx` | Create PowerPoint (.pptx) presentations — 4 themes, layouts, speaker notes | No* |
+| `gmail` | Read your Gmail (read-only) — search, list, read, summarize email | OAuth* |
 
-> \* `browser` requires Playwright: `pip install playwright && playwright install chromium`
-> `document` (.docx) is included — no extra install needed.
-> `pptx` (.pptx) needs python-pptx: `pip install ".[pptx]"`
+> \* `document` (.docx), `pptx` (.pptx) and `gmail` deps ship with the base install — nothing extra.
+> `browser` needs Chromium: run `cortex setup --install`.
+> `gmail` also needs a one-time `cortex connect gmail` (see [Connect external services](#connect-external-services-gmail)).
 
 ---
 
@@ -263,6 +275,9 @@ cortex/
   memory.py           → Cross-session task memory
   voice.py            → Speech-to-text dictation (cortex voice + /voice)
 
+  integrations/
+    google_auth.py    → Google OAuth: connect, persistent tokens, account switching
+
   agents/
     preset.py         → AgentPreset dataclass
     presets.py        → Built-in presets
@@ -275,7 +290,7 @@ cortex/
     registry.py       → ToolRegistry: name → (schema, executor)
     filesystem.py     shell.py      git_tool.py   web.py
     browser.py        search.py     stock.py      weather.py
-    datetime_tool.py  python_exec.py  document.py  pptx.py
+    datetime_tool.py  python_exec.py  document.py  pptx.py  gmail.py
 ```
 
 > `~/.cortex/` — config, stats, memory, run logs. Auto-created, never committed.
@@ -350,6 +365,59 @@ cortex run -m "ollama-cloud/kimi-k2.6:cloud" "your task"
 | [GLM / Zhipu](https://open.bigmodel.cn) | `glm_api_key` | `glm-4-plus` |
 
 See `config.example.toml` for the full config reference.
+
+---
+
+## Connect external services (Gmail)
+
+Let agents read your email. **Read-only** — cortex can search, read and summarize, but never send.
+Auth uses your own Google Cloud project (full control, no third-party server sees your data) and is
+**persistent** (stays logged in) and **switchable** (multiple accounts). The Google libraries ship
+with the base install — you only need the one-time setup below.
+
+### Guided setup — just run it
+
+```bash
+cortex connect gmail
+```
+
+The first time, cortex prints a guide, **opens the right Google Cloud pages for you**, and **watches your
+folder** — the moment the downloaded `client_secret.json` lands (in `~/.cortex/credentials/` or
+Downloads) it detects it. Crucially, it then reads the **project id from that file** and opens the exact
+pages for *that* project, so you never get lost across projects. You only do the clicks Google requires:
+
+> ⚠️ **Do everything in the SAME Google Cloud project.** Watch the project picker (top-left) — mixing
+> projects (client in one, test user in another) is the #1 cause of `403 access_denied`.
+
+1. Create or pick **one project**
+2. **Clients** → *Create OAuth client* → type **Desktop app** → **Download JSON**
+   (if asked, set up the consent screen first: Branding → app name + your email)
+3. Save the JSON to `~/.cortex/credentials/` (or Downloads) — cortex detects it and, for **that project**, opens:
+   - **Enable the Gmail API** → click *Enable*
+   - **Audience → Test users** → add your Gmail address
+4. Press Enter — cortex connects. Stays in *Testing* mode (access renews every ~7 days via `cortex connect gmail`).
+
+If the Gmail API isn't enabled yet, cortex catches it and prints the exact enable link for your project.
+
+Then just use it:
+
+```bash
+cortex run "summarize my unread emails from this week"
+cortex run "any email from my bank? show the latest one"
+```
+
+> Prefer to do it by hand? `cortex connect gmail --client-secret <path>` skips the assistant.
+
+### Manage accounts
+
+```bash
+cortex accounts                       # list connected accounts (★ = active)
+cortex accounts --use you@gmail.com   # switch the active account
+cortex disconnect gmail you@gmail.com # remove an account
+```
+
+Inside `cortex chat`, use `/account` to view or switch accounts on the fly. Tokens live in
+`~/.cortex/credentials/` (never committed).
 
 ---
 

@@ -7,7 +7,8 @@ tool call live. Zero API cost by default; optional cloud providers via litellm.
 
 ```
 cortex/
-  cli.py         → typer entrypoints: run, chat, agents, models, history, stats, memory, config, version
+  cli.py         → typer entrypoints: run, chat, voice, connect, accounts, disconnect, setup, agents,
+                   models, history, stats, memory, config, version. `setup` checks/installs tool deps.
   agent.py       → compat shim: run() → dry-run preview OR orchestrate()
   events.py      → Event dataclass + EventBus (thread-safe queue). Decouples loop ↔ display.
   display.py     → ALL terminal visuals (Rich). AgentDisplay (single) + MultiAgentDisplay (parallel).
@@ -17,6 +18,11 @@ cortex/
   memory.py      → ~/.cortex/memory.jsonl: one entry per completed task (task → result summary).
   voice.py       → speech-to-text DICTATION (not an agent tool). Lazy SpeechRecognition+PyAudio.
                    Powers `cortex voice` + the /voice chat command: speak → transcript → run as task.
+
+  integrations/
+    google_auth.py → shared Google OAuth (BYO GCP client_secret). connect()/get_credentials()/
+                     list_accounts()/set_active(). Tokens in ~/.cortex/credentials/google/<email>.json,
+                     active.txt pointer. Lazy google-* imports. Persistent + switchable accounts.
 
   agents/
     preset.py       → AgentPreset dataclass (name, description, system_prompt, tools, model?)
@@ -42,6 +48,7 @@ cortex/
     browser.py       → Playwright headless Chromium (JS sites, job boards, SPAs)
     document.py      → create .docx (python-docx) / .txt from markdown-ish content
     pptx.py          → create .pptx (python-pptx) from a list of slide specs, 4 themes
+    gmail.py         → read-only Gmail (search/read) via integrations.google_auth; settings=cfg like shell
 
 tests/
     test_tools.py    → tool logic only, no LLM/network
@@ -95,6 +102,11 @@ Unknown tool → inject error + force_answer.
    Unmapped tools fall back to ANALYZE.
 4. Add to a preset's `tools` tuple in `cortex/agents/presets.py` (or create a new preset).
 5. If it needs config (keys/urls), add the field to `config.py` `Settings`.
+6. Dependencies: **pure-Python** deps go in `pyproject.toml` `[project] dependencies` (core, so every
+   device gets them via `pip install -e .`). Only deps needing a **system lib/binary** (pyaudio→PortAudio,
+   playwright→browser) go in `[project.optional-dependencies]` AND in `cli.py` `_TOOL_DEPS` so
+   `cortex setup` can check/install them. Import such deps **lazily** inside `execute()` and return a
+   clear `[ERROR]` if missing (see `browser.py`, `gmail.py`, `voice.py`).
 
 ## Adding a new agent preset
 

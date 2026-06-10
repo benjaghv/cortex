@@ -22,6 +22,7 @@ from cortex.tools import (
     document,
     filesystem,
     git_tool,
+    gmail,
     pptx,
     python_exec,
     search,
@@ -56,6 +57,7 @@ def _default_entries(cfg: Settings) -> dict[str, ToolEntry]:
         ("python_exec", python_exec.SCHEMA, lambda a: python_exec.execute(**a)),
         ("document",   document.SCHEMA,    lambda a: document.execute(**a)),
         ("pptx",       pptx.SCHEMA,        lambda a: pptx.execute(**a)),
+        ("gmail",      gmail.SCHEMA,       lambda a: gmail.execute(settings=cfg, **a)),
     ]
     return {name: ToolEntry(name, schema, ex) for name, schema, ex in raw}
 

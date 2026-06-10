@@ -45,6 +45,12 @@ _TOOL_DESC = {
         "Pass path + a list of slides (each with title, optional subtitle/content bullets/layout/notes). "
         "Themes: light, dark, corporate, sunset. Bullets support **bold**, *italic*, `code`."
     ),
+    "gmail": (
+        "gmail: read the user's Gmail (read-only) — search, list, read and summarize email. "
+        "Use for ANY request about their inbox/correo/email. "
+        "action='search' with a Gmail query (e.g. 'is:unread', 'from:x@y.com newer_than:7d'); "
+        "action='read' with a message id to get the full body. Cannot send."
+    ),
 }
 
 _ALL_TOOLS = tuple(_TOOL_DESC.keys())  # includes git, browser, document, all tools
@@ -136,6 +142,19 @@ _register(_make(
 ))
 
 _register(_make(
+    name="comms",
+    description="Reads and summarizes the user's email (Gmail), and looks things up on the web.",
+    role_intro="You are cortex's communications specialist. You read the user's inbox and summarize it.",
+    tools=("gmail", "search", "web"),
+    role_rules=(
+        "- Email / inbox / correo questions → use the 'gmail' tool (read-only).\n"
+        "- gmail action='search' with a Gmail query (is:unread, from:, subject:, newer_than:7d); "
+        "action='read' with the message id from search results.\n"
+        "- Summarize clearly: sender, subject, and the gist. Never invent email content."
+    ),
+))
+
+_register(_make(
     name="generalist",
     description="Handles any task; has access to every tool. Default for simple requests.",
     role_intro="You are cortex, a helpful AI assistant with access to all local tools.",
@@ -147,6 +166,8 @@ _register(_make(
         "NEVER use filesystem for Word files. Pass title= and content= with # headings, - bullets, **bold**.\n"
         "- CRITICAL: 'presentación', 'presentation', 'slides', 'deck', '.pptx' → ALWAYS use 'pptx' tool. "
         "Pass path= and slides= (list of {title, content:[bullets], layout}). NEVER use filesystem for slides.\n"
+        "- Email / inbox / correo / Gmail → use the 'gmail' tool (read-only): "
+        "action='search' (Gmail query) then action='read' (message id).\n"
         + _BROWSER_RULE
     ),
 ))

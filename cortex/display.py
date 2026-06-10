@@ -77,6 +77,9 @@ _VERBS = {
     ("python_exec", None):    ("PYTHON",  "▶", "tool.name"),
     ("document", None):       ("DOC",     "📄", "warning"),
     ("pptx", None):           ("SLIDES",  "▭", "warning"),
+    ("gmail", "search"):      ("MAIL",    "📧", "info"),
+    ("gmail", "read"):        ("MAIL",    "📧", "info"),
+    ("gmail", None):          ("MAIL",    "📧", "info"),
 }
 
 
@@ -97,6 +100,7 @@ _GERUND = {
     "TIME": "Checking time", "WEATHER": "Checking weather",
     "MKDIR": "Creating folder", "PYTHON": "Computing",
     "DOC": "Writing document", "SLIDES": "Building slides",
+    "MAIL": "Reading mail",
 }
 
 
@@ -123,6 +127,8 @@ def _clean_label(tool: str, args: dict) -> tuple[str, str, str]:
     elif tool in ("document", "pptx"):
         path = str(args.get("path", ""))
         hint = path.replace("\\", "/").rstrip("/").split("/")[-1] if path else ""
+    elif tool == "gmail":
+        hint = str(args.get("query") or args.get("id") or "")
     if len(hint) > 40:
         hint = hint[:37] + "..."
     return gerund, hint, style

@@ -17,11 +17,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 CONFIG_DIR = Path.home() / ".cortex"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 RUNS_DIR = CONFIG_DIR / "runs"
+CREDENTIALS_DIR = CONFIG_DIR / "credentials"
 
 
 def _ensure_dirs() -> None:
     CONFIG_DIR.mkdir(exist_ok=True)
     RUNS_DIR.mkdir(exist_ok=True)
+    CREDENTIALS_DIR.mkdir(exist_ok=True)
 
 
 def _load_toml() -> dict:
@@ -115,6 +117,18 @@ class Settings(BaseSettings):
     # ── Display ─────────────────────────────────────────────────────────────────
     show_thinking: bool = Field(default=True)
     truncate_output: int = Field(default=2000)
+
+    # ── Integrations: Google / Gmail ─────────────────────────────────────────────
+    google_client_secret_path: Optional[str] = Field(
+        default=None,
+        description="Path to your Google Cloud OAuth client_secret.json (BYO project). "
+                    "If unset, cortex looks in ~/.cortex/credentials/google_client_secret.json",
+    )
+    gmail_scopes: list[str] = Field(
+        default_factory=lambda: ["https://www.googleapis.com/auth/gmail.readonly"],
+        description="OAuth scopes for Gmail. Read-only by default.",
+    )
+    gmail_enabled: bool = Field(default=True, description="Expose the gmail tool to agents")
 
     @classmethod
     def load(cls) -> "Settings":

@@ -17,5 +17,11 @@ memory.jsonl
 stats.json
 runs/
 
+# Never commit OAuth client secrets or tokens (in case one is downloaded into the repo dir)
+client_secret*.json
+*credentials*.json
+credentials/
+.cortex/
+
 # Cortex tools folder
 cortex tools/
