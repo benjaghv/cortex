@@ -65,6 +65,18 @@ def test_is_conversational_rejects_actions_and_tools():
     assert not orchestrator._is_conversational("resume el contenido de example.com")
 
 
+def test_is_conversational_regressions():
+    """Real cases that wrongly hit the no-tools path and made the model hallucinate."""
+    # Git/GitHub question phrased politely → must use the git tool, not chat.
+    assert not orchestrator._is_conversational("puedes chequear los ultimos cambios subidos a github?")
+    assert not orchestrator._is_conversational("¿cuál es el último commit del repositorio?")
+    # "que es" must only count as a starter at the START, not mid-sentence.
+    assert not orchestrator._is_conversational("pero me refiero al repo que estoy que es de clinioapp")
+    # A genuine conceptual question with the same words at the start still works.
+    assert orchestrator._is_conversational("¿qué es un repositorio bare en git?") is False  # 'git'+'repositorio' signal
+    assert orchestrator._is_conversational("qué es la herencia en POO")
+
+
 def test_eventbus_emitter_stamps_agent():
     bus = EventBus()
     emit = bus.emitter_for("coder")

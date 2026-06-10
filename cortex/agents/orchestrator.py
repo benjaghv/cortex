@@ -118,10 +118,12 @@ _ACTION_VERBS = frozenset((
     "instala", "muéstrame", "muestrame", "dame", "consigue", "actualiza",
     "modifica", "edita", "elimina", "borra", "renombra", "mueve", "copia",
     "clona", "commit", "commitea", "pushea", "push", "calcula", "convierte",
-    "traduce", "resume", "resúmeme", "analiza", "analízame", "revisa", "compila",
+    "traduce", "resume", "resúmeme", "analiza", "analízame", "revisa", "revisar",
+    "compila", "chequea", "chequear", "checa", "checar", "verifica", "verificar",
+    "comprueba", "comprobar", "mira", "míra", "fíjate", "fijate", "muestra",
     "create", "make", "write", "generate", "save", "search", "download",
     "open", "read", "run", "build", "fetch", "install", "update", "delete",
-    "remove", "calculate", "translate", "summarize", "analyze", "review", "commit",
+    "remove", "calculate", "translate", "summarize", "analyze", "review", "check",
 ))
 
 # Phrasings that need a tool even when written as a question.
@@ -133,6 +135,9 @@ _TOOL_SIGNALS = (
     "what time", "today's date", "what's the date",
     "archivo", "carpeta", "documento", "presentación", "presentacion",
     ".docx", ".pptx", "file", "folder",
+    # version control — these questions need the git tool, never a chat reply
+    "github", "repositorio", "commit", "git status", "git log",
+    "cambios subidos", "últimos cambios", "ultimos cambios", "rama main",
 )
 
 # Conceptual openers → answer from own knowledge.
@@ -154,28 +159,35 @@ _GREETINGS = (
 
 
 def _is_conversational(task: str) -> bool:
-    """True only when confident the task is a pure question/greeting needing NO tools."""
-    t = task.strip().lower()
+    """True only when confident the task is a pure question/greeting needing NO tools.
+
+    Conservative: the direct path has NO tools, so a wrong "yes" makes the model
+    hallucinate (e.g. answering a git question from imagination). A wrong "no" only
+    costs latency — the agent flow answers conceptual questions directly anyway.
+    So we fire ONLY on positive signals matched at the START of the message; there is
+    deliberately no generic "ends with ?" fallback (it caught tool-needing requests
+    like "¿puedes chequear los cambios en github?").
+    """
+    t = task.strip().lower().lstrip("¿¡ ").strip()
     if not t:
         return False
 
-    # Live-data / file / URL signals → needs a tool or agent, not a chat reply.
+    # Live-data / file / version-control / URL signals → needs a tool, not a chat reply.
     if any(sig in t for sig in _TOOL_SIGNALS):
         return False
     if any(pat in t for pat in _URL_PATTERNS):
         return False
 
-    # An action verb anywhere (whole-word match) → the user wants something done.
+    # An action/inspection verb anywhere (whole-word match) → the user wants something done.
     words = set(re.findall(r"[a-záéíóúñü]+", t))
     if words & _ACTION_VERBS:
         return False
 
-    # Positive signals for "just answer".
+    # Positive signals must appear at the START (prefix), never mid-sentence —
+    # otherwise "…que es de clinioapp" would match the "que es" starter.
     if any(t.startswith(g) for g in _GREETINGS):
         return True
-    if any(s in t for s in _QUESTION_STARTERS):
-        return True
-    if t.startswith("¿") or t.endswith("?"):
+    if any(t.startswith(s) for s in _QUESTION_STARTERS):
         return True
     return False
 

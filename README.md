@@ -71,6 +71,15 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 ```
 
+**Optional extras** (install only what you need):
+
+```bash
+pip install -e ".[pptx]"      # PowerPoint generation (pptx tool)
+pip install -e ".[voice]"     # voice dictation (cortex voice / /voice)
+pip install -e ".[browser]"   # headless browser (then: playwright install chromium)
+pip install -e ".[all]"       # everything above + dev tools
+```
+
 ---
 
 ## Local models
@@ -159,8 +168,21 @@ cortex chat
 | `/repo <path>` | set active git repo for this session |
 | `/repo` | show current active repo path |
 | `/verbose` | toggle verbose mode |
+| `/voice` | dictate your next prompt by speaking |
 | `/dry-run <task>` | plan without executing |
 | `exit` | quit |
+
+### Voice (dictation)
+
+Talk to cortex instead of typing. Needs the voice extra: `pip install ".[voice]"`.
+
+```bash
+cortex voice                  # speak one task, cortex transcribes and runs it
+cortex voice --lang en-US     # set speech language (default es-ES)
+```
+
+Inside a chat session, type `/voice`, speak when you see **🎤 Escuchando…**, and your
+words become the next prompt. Transcription uses the Google Web Speech API (no key, needs internet).
 
 ### Flags
 
@@ -178,6 +200,7 @@ cortex run -m ollama/qwen3:8b "task"  # override model for this run
 ```
 cortex run "task"        Run a task (auto-orchestrates agents)
 cortex chat              Interactive multi-task session
+cortex voice             Speak a task instead of typing it (dictation)
 cortex agents            List all agent presets and their tools
 cortex models            List local + cloud models
 cortex history           Show recent run history
@@ -195,7 +218,7 @@ cortex version           Show version
 | Agent | Tools | Best for |
 |---|---|---|
 | **generalist** | all tools | simple or ambiguous tasks — default fallback |
-| **coder** | filesystem, shell, git, python_exec, document | files, scripts, code, git ops, Word docs |
+| **coder** | filesystem, shell, git, python_exec, document, pptx | files, scripts, code, git ops, Word docs, slides |
 | **devops** | git, shell, filesystem, python_exec | repo management, commits, diffs |
 | **researcher** | search, web, browser, filesystem | web search, URL fetching, JS-heavy sites, job boards |
 | **data** | stock, weather, datetime, python_exec | live prices, weather, date math |
@@ -219,9 +242,11 @@ Each agent only sees its assigned tools — no accidental cross-contamination.
 | `datetime` | Current local date and time | No |
 | `python_exec` | Run a Python snippet, capture output | No |
 | `document` | Create formatted Word (.docx) or plain text files with headings, bullets, bold | No* |
+| `pptx` | Create PowerPoint (.pptx) presentations — 4 themes, layouts, speaker notes | No* |
 
 > \* `browser` requires Playwright: `pip install playwright && playwright install chromium`
 > `document` (.docx) is included — no extra install needed.
+> `pptx` (.pptx) needs python-pptx: `pip install ".[pptx]"`
 
 ---
 
@@ -236,6 +261,7 @@ cortex/
   events.py           → Thread-safe EventBus
   stats.py            → Token counting + savings estimate
   memory.py           → Cross-session task memory
+  voice.py            → Speech-to-text dictation (cortex voice + /voice)
 
   agents/
     preset.py         → AgentPreset dataclass
@@ -249,7 +275,7 @@ cortex/
     registry.py       → ToolRegistry: name → (schema, executor)
     filesystem.py     shell.py      git_tool.py   web.py
     browser.py        search.py     stock.py      weather.py
-    datetime_tool.py  python_exec.py  document.py
+    datetime_tool.py  python_exec.py  document.py  pptx.py
 ```
 
 > `~/.cortex/` — config, stats, memory, run logs. Auto-created, never committed.
