@@ -148,7 +148,7 @@ _BANNER_LINES = [
 _BANNER_COLORS = ["#9B7FFF", "#8B6FFF", "#7C5CFF", "#7C5CFF", "#6B4EEE", "#5A3DDD"]
 
 
-def print_banner(model: str = "", version: str = "0.1.0") -> None:
+def print_banner(model: str = "", version: str = "0.3.0") -> None:
     console.print()
     for line, color in zip(_BANNER_LINES, _BANNER_COLORS):
         console.print(Text(line, style=f"bold {color}"), justify="center")
