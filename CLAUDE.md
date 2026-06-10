@@ -15,6 +15,8 @@ cortex/
   config.py      → pydantic-settings, loads ~/.cortex/config.toml. Env prefix: CORTEX_
   stats.py       → ~/.cortex/stats.json: cumulative tokens + runs. Savings vs cloud reference price.
   memory.py      → ~/.cortex/memory.jsonl: one entry per completed task (task → result summary).
+  voice.py       → speech-to-text DICTATION (not an agent tool). Lazy SpeechRecognition+PyAudio.
+                   Powers `cortex voice` + the /voice chat command: speak → transcript → run as task.
 
   agents/
     preset.py       → AgentPreset dataclass (name, description, system_prompt, tools, model?)
@@ -36,6 +38,10 @@ cortex/
     weather.py       → Open-Meteo current + forecast (no key), geocodes city
     datetime_tool.py → current local date/time
     python_exec.py   → run Python snippet in subprocess, capture stdout (timeout)
+    git_tool.py      → git ops with allowlist + blocked destructive patterns + retry
+    browser.py       → Playwright headless Chromium (JS sites, job boards, SPAs)
+    document.py      → create .docx (python-docx) / .txt from markdown-ish content
+    pptx.py          → create .pptx (python-pptx) from a list of slide specs, 4 themes
 
 tests/
     test_tools.py    → tool logic only, no LLM/network
@@ -45,6 +51,10 @@ tests/
 ## Multi-agent orchestration
 
 `cortex run "task"` → `orchestrator.orchestrate()`:
+0. **Direct answer** (`_is_conversational`): pure questions/greetings/opinions with no action
+   verb or live-data signal → `_answer_directly()`: ONE `complete_text` call, no agent loop,
+   no tools. Gated by `cfg.direct_answer_enabled`. Conservative heuristic — when unsure it
+   falls through to the agent flow (= old behavior), so a miss only costs latency.
 1. **Heuristic** (`_looks_simple`): short/single-clause tasks skip the planner → single.
 2. **Planner**: one JSON-mode LLM call lists presets, returns `{mode, subtasks:[{agent,task}]}`.
    Any failure/invalid JSON → fallback to single generalist (worst case = old behavior).

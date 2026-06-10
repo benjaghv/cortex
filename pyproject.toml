@@ -32,7 +32,16 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0", "ruff>=0.4.0"]
 browser = ["playwright>=1.44.0"]
-all = ["playwright>=1.44.0", "pytest>=8.0.0", "ruff>=0.4.0"]
+pptx = ["python-pptx>=0.6.23"]
+voice = ["SpeechRecognition>=3.10.0", "pyaudio>=0.2.13"]
+all = [
+    "playwright>=1.44.0",
+    "python-pptx>=0.6.23",
+    "SpeechRecognition>=3.10.0",
+    "pyaudio>=0.2.13",
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
+]
 
 [project.scripts]
 cortex = "cortex.cli:app"

@@ -91,6 +91,14 @@ class Settings(BaseSettings):
     planner_model: Optional[str] = Field(
         default=None, description="Model for planning/synthesis; defaults to main model"
     )
+    direct_answer_enabled: bool = Field(
+        default=True,
+        description="Answer pure questions/greetings directly (one LLM call, no agent loop or tools)",
+    )
+    voice_language: str = Field(
+        default="es-ES",
+        description="Speech-to-text language for /voice dictation (e.g. es-ES, en-US)",
+    )
 
     # ── Savings estimate (vs cloud) ───────────────────────────────────────────────
     cost_ref_input_per_1m: float = Field(

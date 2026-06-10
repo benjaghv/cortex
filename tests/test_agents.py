@@ -11,7 +11,9 @@ from cortex.tools.registry import ToolRegistry
 
 def test_registry_subset():
     reg = ToolRegistry.default(Settings.load())
-    assert len(reg) == 8
+    # Core tools are always registered (count grows as tools are added).
+    for tool in ("filesystem", "shell", "python_exec", "web", "document", "pptx"):
+        assert tool in reg, f"{tool} missing from registry"
     sub = reg.subset(["filesystem", "shell", "python_exec"])
     assert sorted(sub.names()) == ["filesystem", "python_exec", "shell"]
     assert len(sub.schemas()) == 3
@@ -38,6 +40,29 @@ def test_looks_simple_heuristic():
     assert not orchestrator._looks_simple(
         "busca qué es Python y dame el precio de la accion de Apple"
     )
+
+
+def test_is_conversational_questions():
+    # Pure questions / greetings / opinions → answer directly.
+    assert orchestrator._is_conversational("qué es la recursividad?")
+    assert orchestrator._is_conversational("¿cómo funciona git rebase?")
+    assert orchestrator._is_conversational("explícame qué es un closure en Python")
+    assert orchestrator._is_conversational("hola, cómo estás")
+    assert orchestrator._is_conversational("qué opinas de usar threads aquí?")
+    assert orchestrator._is_conversational("what is a monad?")
+
+
+def test_is_conversational_rejects_actions_and_tools():
+    # Action verbs → must NOT be treated as a chat question.
+    assert not orchestrator._is_conversational("créame un script en Python")
+    assert not orchestrator._is_conversational("haz un commit con los cambios")
+    assert not orchestrator._is_conversational("genera una presentación sobre cortex")
+    # Live-data / file signals → needs a tool even phrased as a question.
+    assert not orchestrator._is_conversational("qué precio tiene la acción de Apple?")
+    assert not orchestrator._is_conversational("qué clima hace en Santiago?")
+    assert not orchestrator._is_conversational("lee el archivo config.toml")
+    # URL → researcher, not chat.
+    assert not orchestrator._is_conversational("resume el contenido de example.com")
 
 
 def test_eventbus_emitter_stamps_agent():

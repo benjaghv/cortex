@@ -76,6 +76,7 @@ _VERBS = {
     ("weather", None):        ("WEATHER", "☼", "info"),
     ("python_exec", None):    ("PYTHON",  "▶", "tool.name"),
     ("document", None):       ("DOC",     "📄", "warning"),
+    ("pptx", None):           ("SLIDES",  "▭", "warning"),
 }
 
 
@@ -95,6 +96,7 @@ _GERUND = {
     "QUOTE": "Fetching price", "ANALYZE": "Analyzing",
     "TIME": "Checking time", "WEATHER": "Checking weather",
     "MKDIR": "Creating folder", "PYTHON": "Computing",
+    "DOC": "Writing document", "SLIDES": "Building slides",
 }
 
 
@@ -118,6 +120,9 @@ def _clean_label(tool: str, args: dict) -> tuple[str, str, str]:
         hint = str(args.get("symbol", "")).upper()
     elif tool == "weather":
         hint = str(args.get("city", ""))
+    elif tool in ("document", "pptx"):
+        path = str(args.get("path", ""))
+        hint = path.replace("\\", "/").rstrip("/").split("/")[-1] if path else ""
     if len(hint) > 40:
         hint = hint[:37] + "..."
     return gerund, hint, style
@@ -184,6 +189,8 @@ class AgentDisplay:
         self.start_time = time.time()
         self._t0: float = 0.0
         self._status = None  # rich Status, clean mode only
+        self.tools_used: list[str] = []   # accumulated for the post-answer summary
+        self.agent_name: "str | None" = None  # set by orchestrator (which preset ran)
 
     # ── lifecycle ──────────────────────────────────────────────────────────────
     def start(self) -> None:
@@ -230,9 +237,18 @@ class AgentDisplay:
     def tool_call(self, tool_name: str, args: dict) -> None:
         self.step += 1
         self._t0 = time.time()
+        self.tools_used.append(tool_name)
 
         if not self.verbose:
+            verb, icon, vstyle = _verb_for(tool_name, args)
             gerund, hint, style = _clean_label(tool_name, args)
+            # Persistent real-time line so the user sees each tool as it runs.
+            line = Text.assemble((f"  {icon} ", vstyle), (f"[{self.step:02d}] ", "step.number"),
+                                 (gerund, style))
+            if hint:
+                line.append(f"  {hint}", style="meta")
+            console.print(line)
+            # And the live spinner shows the in-flight action.
             label = Text.assemble((f"{gerund}", style))
             if hint:
                 label.append(f"  {hint}", style="meta")
@@ -301,6 +317,25 @@ class AgentDisplay:
         self.stop()
         elapsed = time.time() - self.start_time
         print_result(answer, meta=f"{self.step} steps · {elapsed:.1f}s")
+        self._print_usage_summary()
+
+    def _print_usage_summary(self) -> None:
+        """Compact recap: which agent ran and which tools it used."""
+        if not self.tools_used and not self.agent_name:
+            return
+        from collections import Counter
+
+        parts: list[str] = []
+        if self.agent_name:
+            parts.append(f"agent: {self.agent_name}")
+        if self.tools_used:
+            counts = Counter(self.tools_used)
+            tools = ", ".join(f"{c}×{name}" if c > 1 else name for name, c in counts.items())
+            parts.append(f"tools: {tools}")
+        else:
+            parts.append("no tools")
+        console.print(Text.assemble(("  ⓘ ", "info"), ("  ·  ".join(parts), "meta")))
+        console.print()
 
     def dry_run_summary(self, planned: list[dict]) -> None:
         console.print()

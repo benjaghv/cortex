@@ -16,3 +16,6 @@ config.toml
 memory.jsonl
 stats.json
 runs/
+
+# Cortex tools folder
+cortex tools/

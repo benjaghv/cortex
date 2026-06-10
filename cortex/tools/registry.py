@@ -22,6 +22,7 @@ from cortex.tools import (
     document,
     filesystem,
     git_tool,
+    pptx,
     python_exec,
     search,
     shell,
@@ -54,6 +55,7 @@ def _default_entries(cfg: Settings) -> dict[str, ToolEntry]:
         ("weather", weather.SCHEMA, lambda a: weather.execute(**a)),
         ("python_exec", python_exec.SCHEMA, lambda a: python_exec.execute(**a)),
         ("document",   document.SCHEMA,    lambda a: document.execute(**a)),
+        ("pptx",       pptx.SCHEMA,        lambda a: pptx.execute(**a)),
     ]
     return {name: ToolEntry(name, schema, ex) for name, schema, ex in raw}
 

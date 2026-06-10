@@ -13,6 +13,11 @@ max_iterations = 20
 # ── Orchestration ───────────────────────────────────────────────────────────
 orchestrator_enabled = true
 max_parallel_agents = 4
+direct_answer_enabled = true   # answer pure questions directly, no agent/tools
+
+# ── Voice (dictation) ────────────────────────────────────────────────────────
+# Used by `cortex voice` and the /voice chat command. Needs: pip install ".[voice]"
+voice_language = "es-ES"       # e.g. es-ES, en-US
 
 # ── Memory ──────────────────────────────────────────────────────────────────
 memory_enabled = true

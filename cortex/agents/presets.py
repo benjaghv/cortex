@@ -39,6 +39,12 @@ _TOOL_DESC = {
         "Use for ANY request to 'write a Word doc', 'create a .docx', or 'make a document with formatting'. "
         "Pass title + content with markdown-style headings (# ## ###), **bold**, and - bullet lines."
     ),
+    "pptx": (
+        "pptx: create a PowerPoint (.pptx) presentation. "
+        "Use for ANY request to 'make a presentation', 'create slides', 'a deck', 'una presentación'. "
+        "Pass path + a list of slides (each with title, optional subtitle/content bullets/layout/notes). "
+        "Themes: light, dark, corporate, sunset. Bullets support **bold**, *italic*, `code`."
+    ),
 }
 
 _ALL_TOOLS = tuple(_TOOL_DESC.keys())  # includes git, browser, document, all tools
@@ -75,14 +81,15 @@ _register(_make(
     name="coder",
     description="Reads/writes code and files, runs shell commands, Python scripts, and git operations.",
     role_intro="You are cortex's coding specialist. You work with local files, the shell, Python, and git.",
-    tools=("filesystem", "shell", "git", "python_exec", "document"),
+    tools=("filesystem", "shell", "git", "python_exec", "document", "pptx"),
     role_rules=(
         "- Stay on the coding/files/scripts task you were given; do not browse the web.\n"
         "- Prefer filesystem over shell for reading/writing files.\n"
         "- For ANY git task: call git() tool directly — NEVER explain commands, execute them.\n"
         "- git add → git(args='add <file>'). git commit → git(args='commit -m \"msg\"'). "
         "git push → git(args='push'). Do it, don't describe it.\n"
-        "- CRITICAL: Word / .docx requests → ALWAYS use 'document' tool, NEVER filesystem."
+        "- CRITICAL: Word / .docx requests → ALWAYS use 'document' tool, NEVER filesystem.\n"
+        "- CRITICAL: presentation / slides / .pptx requests → ALWAYS use 'pptx' tool, NEVER filesystem."
     ),
 ))
 
@@ -138,6 +145,8 @@ _register(_make(
         "- News, current events, docs → 'search'.\n"
         "- CRITICAL: 'word', 'Word', 'docx', '.docx', 'documento Word' → ALWAYS use 'document' tool. "
         "NEVER use filesystem for Word files. Pass title= and content= with # headings, - bullets, **bold**.\n"
+        "- CRITICAL: 'presentación', 'presentation', 'slides', 'deck', '.pptx' → ALWAYS use 'pptx' tool. "
+        "Pass path= and slides= (list of {title, content:[bullets], layout}). NEVER use filesystem for slides.\n"
         + _BROWSER_RULE
     ),
 ))

@@ -93,6 +93,30 @@ def run(
 
 
 @app.command()
+def voice(
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="Override model."),
+    cloud: bool = typer.Option(False, "--cloud", help="Use fallback_model from config."),
+    lang: Optional[str] = typer.Option(None, "--lang", "-l", help="Speech language, e.g. es-ES, en-US."),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+    no_banner: bool = typer.Option(False, "--no-banner"),
+):
+    """Speak a task instead of typing it — transcribes your voice, then runs it."""
+    from cortex import voice as voice_input
+    cfg = Settings.load()
+    if model:
+        cfg.model = model
+    if not no_banner:
+        print_banner(model=cfg.effective_model(cloud=cloud), version=__version__)
+
+    spoken = voice_input.listen(cfg, language=lang)
+    if not spoken:
+        return
+    console.print(f"  [dim]🎤 dijiste:[/] [bold white]{spoken}[/]\n")
+    from cortex.agent import run as agent_run
+    agent_run(task=spoken, cfg=cfg, cloud=cloud, dry_run=False, verbose=verbose)
+
+
+@app.command()
 def chat(
     model: Optional[str] = typer.Option(None, "--model", "-m"),
     cloud: bool = typer.Option(False, "--cloud"),
@@ -107,11 +131,15 @@ def chat(
     state = {"verbose": verbose}
 
     def _fetch_models() -> list[str]:
+        return [m["name"] for m in _fetch_models_full()]
+
+    def _fetch_models_full() -> list[dict]:
+        """Full model dicts from Ollama (name + size + …), for the models table."""
         try:
             with httpx.Client(timeout=4.0) as c:
                 r = c.get(f"{cfg.ollama_base_url}/api/tags")
                 r.raise_for_status()
-                return [m["name"] for m in r.json().get("models", [])]
+                return r.json().get("models", [])
         except Exception:
             return []
 
@@ -143,12 +171,11 @@ def chat(
 
         # /models — list available
         if slug in ("/models", "/model") and not arg:
-            available = _fetch_models()
-            if not available and not getattr(cfg, "ollama_cloud_api_key", None):
+            local = _fetch_models_full()  # full dicts → keeps the Size column
+            if not local and not getattr(cfg, "ollama_cloud_api_key", None):
                 _ollama_help()
                 return True
             # Show table even if local list is empty — cloud section still useful
-            local = [{"name": m} for m in available]
             print_models_table(local, cfg=cfg)
             return True
 
@@ -279,6 +306,7 @@ def chat(
             console.print("  [#22D3EE]/repo <path>[/]     — set active git repo for this session")
             console.print("  [#22D3EE]/repo[/]            — show current repo path")
             console.print("  [#22D3EE]/verbose[/]         — toggle verbose / clean mode")
+            console.print("  [#22D3EE]/voice[/]           — dictate your next prompt by speaking")
             console.print("  [#22D3EE]/dry-run <task>[/]  — plan without executing")
             console.print("  [#22D3EE]exit[/]             — quit")
             console.print()
@@ -373,8 +401,18 @@ def chat(
                 print_info("Bye. 👋")
                 break
             if task.startswith("/"):
-                _handle_slash(task)
-                continue
+                # /voice → dictate a prompt by speaking, then run it as a task.
+                if task.lower().split()[0] == "/voice":
+                    from cortex import voice
+                    spoken = voice.listen(cfg)
+                    if not spoken:
+                        continue
+                    task = spoken
+                    console.print(f"  [dim]🎤 dijiste:[/] [bold white]{task}[/]\n")
+                    # fall through → run `task` through the agent below
+                else:
+                    _handle_slash(task)
+                    continue
             ctx = _build_session_context()
             result = agent_run(task=task, cfg=cfg, cloud=cloud, dry_run=False,
                                verbose=state["verbose"], session_context=ctx)

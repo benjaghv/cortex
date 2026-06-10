@@ -15,6 +15,7 @@ so the worst case is exactly today's behavior.
 from __future__ import annotations
 
 import json
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -100,6 +101,83 @@ def _looks_simple(task: str) -> bool:
     # Multiple independent data requests → allow planner to parallelize
     connectors = (" y ", " and ", "; ", ", luego", ", después", " then ")
     return not any(c in t for c in connectors)
+
+
+# ── intent: question vs action ─────────────────────────────────────────────────────────
+# Goal: a pure question/greeting/explanation is answered DIRECTLY (one LLM call, no agent
+# loop, no tools). Anything that wants something DONE, or needs live data, falls through to
+# the normal agent/tool flow. Conservative by design: when unsure → normal flow (= old
+# behavior), so a false negative just costs a bit of latency, never a wrong answer.
+
+# Verbs that mean "do/make something" → use agents/tools, not a chat reply.
+_ACTION_VERBS = frozenset((
+    "crea", "créa", "crear", "créame", "creame", "haz", "hazme", "hacer",
+    "escribe", "escríbeme", "escribeme", "genera", "genérame", "generame",
+    "guarda", "guárdame", "guardame", "busca", "búscame", "buscame", "descarga",
+    "descárgame", "abre", "ábreme", "lee", "léeme", "leeme", "corre", "ejecuta",
+    "instala", "muéstrame", "muestrame", "dame", "consigue", "actualiza",
+    "modifica", "edita", "elimina", "borra", "renombra", "mueve", "copia",
+    "clona", "commit", "commitea", "pushea", "push", "calcula", "convierte",
+    "traduce", "resume", "resúmeme", "analiza", "analízame", "revisa", "compila",
+    "create", "make", "write", "generate", "save", "search", "download",
+    "open", "read", "run", "build", "fetch", "install", "update", "delete",
+    "remove", "calculate", "translate", "summarize", "analyze", "review", "commit",
+))
+
+# Phrasings that need a tool even when written as a question.
+_TOOL_SIGNALS = (
+    "clima", "pronóstico", "pronostico", "temperatura", "weather",
+    "precio", "price", "acción de", "acciones de", "stock", "cotización", "cotizacion",
+    "bitcoin", "crypto", "cripto", "dólar", "dolar", "euro",
+    "qué hora", "que hora", "qué día", "que dia", "fecha de hoy",
+    "what time", "today's date", "what's the date",
+    "archivo", "carpeta", "documento", "presentación", "presentacion",
+    ".docx", ".pptx", "file", "folder",
+)
+
+# Conceptual openers → answer from own knowledge.
+_QUESTION_STARTERS = (
+    "qué es", "que es", "qué son", "que son", "cuál es", "cual es",
+    "cómo funciona", "como funciona", "por qué", "por que", "porqué", "porque",
+    "explica", "explícame", "explicame", "define", "definición de", "definicion de",
+    "diferencia entre", "qué significa", "que significa", "para qué sirve",
+    "para que sirve", "qué opinas", "que opinas", "tiene sentido", "me recomiendas",
+    "what is", "what are", "how does", "why ", "explain", "tell me about",
+    "what's the difference", "do you think", "should i",
+)
+
+_GREETINGS = (
+    "hola", "buenas", "hey", "hi ", "hello", "qué tal", "que tal",
+    "cómo estás", "como estas", "buenos días", "buenos dias", "buenas tardes",
+    "buenas noches", "gracias", "thanks", "thank you",
+)
+
+
+def _is_conversational(task: str) -> bool:
+    """True only when confident the task is a pure question/greeting needing NO tools."""
+    t = task.strip().lower()
+    if not t:
+        return False
+
+    # Live-data / file / URL signals → needs a tool or agent, not a chat reply.
+    if any(sig in t for sig in _TOOL_SIGNALS):
+        return False
+    if any(pat in t for pat in _URL_PATTERNS):
+        return False
+
+    # An action verb anywhere (whole-word match) → the user wants something done.
+    words = set(re.findall(r"[a-záéíóúñü]+", t))
+    if words & _ACTION_VERBS:
+        return False
+
+    # Positive signals for "just answer".
+    if any(t.startswith(g) for g in _GREETINGS):
+        return True
+    if any(s in t for s in _QUESTION_STARTERS):
+        return True
+    if t.startswith("¿") or t.endswith("?"):
+        return True
+    return False
 
 
 def _plan(task: str, cfg: Settings, cloud: bool) -> "list[tuple[AgentPreset, str]]":
@@ -225,6 +303,39 @@ def _save_run_log(task, model, mode, jobs, duration_s) -> None:
     )
 
 
+# ── direct-answer path (no agent loop, no tools) ─────────────────────────────────────────
+
+def _answer_directly(task: str, cfg: Settings, cloud: bool, verbose: bool,
+                     mem_block: str, session_context: str) -> str:
+    """Answer a conversational question with ONE LLM call — no ReAct loop, no tools."""
+    model = cfg.effective_model(cloud=cloud)
+    system = (
+        "You are cortex, a helpful and friendly AI assistant. The user is chatting or "
+        "asking a question — answer it directly, clearly and concisely from your own "
+        "knowledge. You are NOT using any tools this turn. "
+        "If the answer would genuinely require live data (weather, prices, a local file, "
+        "a URL), say briefly what you'd need to fetch instead of inventing it. "
+        "Answer in readable markdown, in the SAME language the user wrote in."
+    )
+    if mem_block:
+        system += "\n\n" + mem_block
+    if session_context:
+        system += "\n\n" + session_context
+
+    display = AgentDisplay(task=task, verbose=verbose)
+    display.print_task()
+    display.start()
+    display.on_thinking()
+    try:
+        answer = llm.humanize(llm.complete_text(model, system, task, cfg).strip())
+    finally:
+        display.stop()
+
+    answer = answer or "(no response)"
+    print_result(answer, meta="direct answer · no tools")
+    return answer
+
+
 # ── public entry ───────────────────────────────────────────────────────────────────────
 
 def orchestrate(task: str, cfg: Settings, cloud: bool = False, verbose: bool = False,
@@ -236,6 +347,13 @@ def orchestrate(task: str, cfg: Settings, cloud: bool = False, verbose: bool = F
     stats.bump_runs()
     mem_block = memory.as_prompt_block(cfg.memory_recall) if cfg.memory_enabled else ""
 
+    # ── direct-answer path: pure questions/greetings skip the agent entirely ──────
+    if cfg.direct_answer_enabled and _is_conversational(task):
+        answer = _answer_directly(task, cfg, cloud, verbose, mem_block, session_context)
+        _save_run_log(task, model, "direct", [(presets.generalist(), task)], time.time() - start)
+        _remember(cfg, task, answer)
+        return answer
+
     if force_single or not cfg.orchestrator_enabled:
         jobs = [(presets.generalist(), task)]
     else:
@@ -245,6 +363,7 @@ def orchestrate(task: str, cfg: Settings, cloud: bool = False, verbose: bool = F
     if len(jobs) == 1:
         preset, sub = jobs[0]
         display = AgentDisplay(task=task, verbose=verbose)
+        display.agent_name = preset.name
         display.print_task()
         display.start()
         try:
