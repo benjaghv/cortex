@@ -88,6 +88,42 @@ def _extract_git_commands(content: str) -> "list[str] | None":
     return cmds if cmds else None
 
 
+_GMAIL_ID_RE = None
+_DELETE_INTENT_RE = None
+
+
+def _task_wants_delete(task: str) -> bool:
+    """True if the original task asked to delete/trash email."""
+    global _DELETE_INTENT_RE
+    import re
+    if _DELETE_INTENT_RE is None:
+        _DELETE_INTENT_RE = re.compile(
+            r"\b(elimin\w*|borra\w*|bórra\w*|bota\w*|saca\w*|quita\w*|trash|delete|"
+            r"a la papelera|mover a)\b",
+            re.IGNORECASE,
+        )
+    return bool(_DELETE_INTENT_RE.search(task or ""))
+
+
+def _gmail_ids_from_messages(messages: list) -> list:
+    """Pull message ids out of prior gmail search results in the transcript.
+
+    Search results are formatted '• [<id>] From…' by the gmail tool. We harvest
+    those ids so a delete intent can act on REAL ids (never hallucinated ones)."""
+    global _GMAIL_ID_RE
+    import re
+    if _GMAIL_ID_RE is None:
+        _GMAIL_ID_RE = re.compile(r"•\s*\[([0-9A-Za-z]{8,})\]")
+    ids: list = []
+    for m in messages:
+        c = m.get("content")
+        if isinstance(c, str) and "•" in c:
+            for mid in _GMAIL_ID_RE.findall(c):
+                if mid not in ids:
+                    ids.append(mid)
+    return ids
+
+
 def _extract_text_tool_calls(content: str) -> "list[dict] | None":
     """Parse tool calls embedded in model text (models without native tool_calls support).
 
@@ -259,6 +295,37 @@ def run_agent(
                 force_answer = True
                 continue
 
+            # Intercept: user asked to DELETE email, the model searched (so real ids
+            # are in the transcript) but then just asked for confirmation in text
+            # instead of calling trash. Execute the trash now — its own gate still
+            # asks the human y/N, so this is safe and skips the redundant text loop.
+            gmail_exec = sub.executor("gmail")
+            if (gmail_exec and not force_answer and _task_wants_delete(task)):
+                ids = _gmail_ids_from_messages(messages)
+                if ids:
+                    emit(Event(agent=preset.name, kind="tool_call",
+                               tool="gmail", args={"action": "trash", "ids": ids}))
+                    t0 = time.time()
+                    try:
+                        res = str(gmail_exec({"action": "trash", "ids": ids}))
+                        ok = not res.startswith(_FAIL_PREFIXES)
+                    except Exception as e:
+                        res, ok = f"[ERROR] {type(e).__name__}: {e}", False
+                    emit(Event(agent=preset.name, kind="tool_result",
+                               tool="gmail", result=res, ok=ok))
+                    steps.append({
+                        "tool": "gmail", "args": {"action": "trash", "ids": ids},
+                        "result_preview": res[:200], "success": ok,
+                        "duration_s": round(time.time() - t0, 2),
+                    })
+                    messages.append({"role": "assistant", "content": msg.content,
+                                      "tool_calls": []})
+                    messages.append({"role": "user",
+                                      "content": f"Trash executed. Result:\n{res}\n\n"
+                                                 "Tell the user the outcome in one line."})
+                    force_answer = True
+                    continue
+
             final = llm.humanize(msg.content or "(no response)")
             emit(Event(agent=preset.name, kind="finished", result=final))
             return final
@@ -274,6 +341,17 @@ def run_agent(
 
             # Intercept: filesystem(write, *.docx) → document()
             name, args = _maybe_redirect_to_document(name, args, sub)
+
+            # Intercept: model trashes email ONE id at a time. Coalesce into a single
+            # batch (one confirmation) using ALL ids from the prior search, then stop.
+            coalesced_trash = False
+            if (name == "gmail" and isinstance(args, dict)
+                    and args.get("action") == "trash" and not args.get("ids")
+                    and _task_wants_delete(task)):
+                all_ids = _gmail_ids_from_messages(messages)
+                if len(all_ids) > 1:
+                    args = {"action": "trash", "ids": all_ids}
+                    coalesced_trash = True
 
             emit(Event(agent=preset.name, kind="tool_call", tool=name, args=args))
             tool_count += 1
@@ -319,6 +397,12 @@ def run_agent(
                 "success": ok, "duration_s": round(time.time() - t0, 2),
             })
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+
+            # Batched the whole delete into one call → don't let the model trash
+            # the remaining ids one by one. Force a final answer now.
+            if coalesced_trash:
+                force_answer = True
+                break
 
     timeout = "⚠ Max iterations reached. Partial results above."
     emit(Event(agent=preset.name, kind="finished", result=timeout))

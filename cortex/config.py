@@ -125,8 +125,13 @@ class Settings(BaseSettings):
                     "If unset, cortex looks in ~/.cortex/credentials/google_client_secret.json",
     )
     gmail_scopes: list[str] = Field(
-        default_factory=lambda: ["https://www.googleapis.com/auth/gmail.readonly"],
-        description="OAuth scopes for Gmail. Read-only by default.",
+        default_factory=lambda: [
+            "https://www.googleapis.com/auth/gmail.readonly",  # search / read
+            "https://www.googleapis.com/auth/gmail.send",      # send / draft
+            "https://www.googleapis.com/auth/gmail.modify",    # trash (recoverable)
+        ],
+        description="OAuth scopes for Gmail. Read + send + modify (trash). "
+                    "Permanent delete is intentionally NOT granted.",
     )
     gmail_enabled: bool = Field(default=True, description="Expose the gmail tool to agents")
 

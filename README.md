@@ -232,7 +232,7 @@ cortex version           Show version
 | **devops** | git, shell, filesystem, python_exec | repo management, commits, diffs |
 | **researcher** | search, web, browser, filesystem | web search, URL fetching, JS-heavy sites, job boards |
 | **data** | stock, weather, datetime, python_exec | live prices, weather, date math |
-| **comms** | gmail, search, web | reading + summarizing email, lookups |
+| **comms** | gmail, search, web | read, summarize, send, draft + trash email; lookups |
 
 Each agent only sees its assigned tools — no accidental cross-contamination.
 
@@ -254,7 +254,7 @@ Each agent only sees its assigned tools — no accidental cross-contamination.
 | `python_exec` | Run a Python snippet, capture output | No |
 | `document` | Create formatted Word (.docx) or plain text files with headings, bullets, bold | No* |
 | `pptx` | Create PowerPoint (.pptx) presentations — 4 themes, layouts, speaker notes | No* |
-| `gmail` | Read your Gmail (read-only) — search, list, read, summarize email | OAuth* |
+| `gmail` | Search, read, **send**, draft + **trash** email. Send/trash ask you to confirm first | OAuth* |
 
 > \* `document` (.docx), `pptx` (.pptx) and `gmail` deps ship with the base install — nothing extra.
 > `browser` needs Chromium: run `cortex setup --install`.
@@ -370,10 +370,15 @@ See `config.example.toml` for the full config reference.
 
 ## Connect external services (Gmail)
 
-Let agents read your email. **Read-only** — cortex can search, read and summarize, but never send.
+Let agents manage your email: **search, read, summarize, send, draft, and trash**.
+Every **send** and **trash** stops for an explicit y/N confirmation in your terminal — the model
+can't bypass it. Permanent delete is intentionally not granted (trash is recoverable for 30 days).
 Auth uses your own Google Cloud project (full control, no third-party server sees your data) and is
 **persistent** (stays logged in) and **switchable** (multiple accounts). The Google libraries ship
 with the base install — you only need the one-time setup below.
+
+> Already connected before this update? Run `cortex connect gmail` again to grant the new
+> send + trash permissions (the old token was read-only).
 
 ### Guided setup — just run it
 
@@ -404,6 +409,9 @@ Then just use it:
 ```bash
 cortex run "summarize my unread emails from this week"
 cortex run "any email from my bank? show the latest one"
+cortex run "send an email to ana@x.com saying I'll be 10 min late"   # asks you to confirm
+cortex run "draft a reply thanking them, don't send it"
+cortex run "move that promo email to trash"                          # asks you to confirm
 ```
 
 > Prefer to do it by hand? `cortex connect gmail --client-secret <path>` skips the assistant.

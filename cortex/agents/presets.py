@@ -46,10 +46,13 @@ _TOOL_DESC = {
         "Themes: light, dark, corporate, sunset. Bullets support **bold**, *italic*, `code`."
     ),
     "gmail": (
-        "gmail: read the user's Gmail (read-only) — search, list, read and summarize email. "
-        "Use for ANY request about their inbox/correo/email. "
+        "gmail: read AND manage the user's Gmail. Use for ANY request about their inbox/correo/email. "
         "action='search' with a Gmail query (e.g. 'is:unread', 'from:x@y.com newer_than:7d'); "
-        "action='read' with a message id to get the full body. Cannot send."
+        "action='read' with a message id for the full body; "
+        "action='send' (to, subject, body) sends an email — the user is asked to confirm first; "
+        "action='draft' (to, subject, body) saves a draft without sending; "
+        "action='trash' (id) moves a message to Trash — the user is asked to confirm first. "
+        "Send and trash ALWAYS prompt the user for confirmation; just call the tool, the gate is automatic."
     ),
 }
 
@@ -143,14 +146,23 @@ _register(_make(
 
 _register(_make(
     name="comms",
-    description="Reads and summarizes the user's email (Gmail), and looks things up on the web.",
-    role_intro="You are cortex's communications specialist. You read the user's inbox and summarize it.",
+    description="Reads, summarizes, sends, drafts and trashes the user's email (Gmail); web lookups.",
+    role_intro="You are cortex's communications specialist. You manage the user's inbox: read, summarize, send, draft and clean up email.",
     tools=("gmail", "search", "web"),
     role_rules=(
-        "- Email / inbox / correo questions → use the 'gmail' tool (read-only).\n"
-        "- gmail action='search' with a Gmail query (is:unread, from:, subject:, newer_than:7d); "
+        "- Email / inbox / correo → use the 'gmail' tool.\n"
+        "- Read: action='search' (Gmail query: is:unread, from:, subject:, newer_than:7d) then "
         "action='read' with the message id from search results.\n"
-        "- Summarize clearly: sender, subject, and the gist. Never invent email content."
+        "- Send: action='send' (to, subject, body). To save without sending: action='draft'.\n"
+        "- ALWAYS action='search' FIRST to get REAL message ids. NEVER invent or guess ids — "
+        "the only valid ids come from a search result in this conversation.\n"
+        "- Delete: action='trash'. For ONE email pass id=. For SEVERAL pass ids=[...] in a "
+        "SINGLE call — never loop trash one id at a time. Use only ids from a prior search.\n"
+        "- send and trash AUTOMATICALLY ask the user to confirm. Just call the tool; never ask "
+        "for confirmation yourself in text, and never refuse — the gate is handled for you.\n"
+        "- The gmail tool ALREADY has permission to send and trash. NEVER say you lack permissions "
+        "or need 'full access' — just call the tool.\n"
+        "- Summarize clearly: sender, subject, gist. Never invent email content."
     ),
 ))
 
@@ -166,8 +178,10 @@ _register(_make(
         "NEVER use filesystem for Word files. Pass title= and content= with # headings, - bullets, **bold**.\n"
         "- CRITICAL: 'presentación', 'presentation', 'slides', 'deck', '.pptx' → ALWAYS use 'pptx' tool. "
         "Pass path= and slides= (list of {title, content:[bullets], layout}). NEVER use filesystem for slides.\n"
-        "- Email / inbox / correo / Gmail → use the 'gmail' tool (read-only): "
-        "action='search' (Gmail query) then action='read' (message id).\n"
+        "- Email / inbox / correo / Gmail → use the 'gmail' tool: action='search' (Gmail query), "
+        "action='read' (id), action='send'/'draft' (to, subject, body), action='trash' (id, or "
+        "ids=[...] for MANY in one call). send and trash auto-prompt the user to confirm — just "
+        "call the tool. The tool HAS send+trash permission; never claim you need more access.\n"
         + _BROWSER_RULE
     ),
 ))

@@ -55,6 +55,59 @@ THEME = Theme(
 
 console = Console(theme=THEME, highlight=False)
 
+# ── Human confirmation (for risky tool actions: send email, trash, etc.) ──────────
+# A live spinner may be running while a tool executes. Track it here so the confirm
+# prompt can pause it, ask the human, and resume — without coupling tools to display.
+
+_active_status = None  # rich Status currently spinning, or None
+
+
+def confirm_action(title: str, lines: "list[str]", danger: bool = False) -> bool:
+    """Pause any live spinner, show the action, ask the human y/N. Deny on EOF/Ctrl-C.
+
+    This is the ONLY gate for irreversible tool actions. The model cannot bypass it —
+    it's a real terminal prompt answered by the user, not the LLM.
+    """
+    global _active_status
+    paused = _active_status
+    if paused is not None:
+        try:
+            paused.stop()
+        except Exception:
+            pass
+
+    accent = "#F87171" if danger else "#FBBF24"
+    body = Text()
+    for ln in lines:
+        body.append(ln + "\n")
+    console.print()
+    console.print(Panel(
+        body,
+        title=Text(title, style=f"bold {accent}"),
+        border_style=accent,
+        padding=(0, 2),
+    ))
+    try:
+        ans = console.input(
+            Text.assemble(("  ¿Confirmar? ", f"bold {accent}"), ("[y/N] ", "meta"))
+        ).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        ans = ""
+    ok = ans in ("y", "yes", "s", "si", "sí")
+    console.print(
+        Text("  ✓ Confirmado", style="success") if ok
+        else Text("  ✗ Cancelado", style="tool.error")
+    )
+    console.print()
+
+    if paused is not None:
+        try:
+            paused.start()
+        except Exception:
+            pass
+    return ok
+
+
 # ── Action verbs ─────────────────────────────────────────────────────────────────
 # Maps (tool, action) → (VERB, icon, style). Drives the live "what is it doing" line.
 
@@ -79,6 +132,9 @@ _VERBS = {
     ("pptx", None):           ("SLIDES",  "▭", "warning"),
     ("gmail", "search"):      ("MAIL",    "📧", "info"),
     ("gmail", "read"):        ("MAIL",    "📧", "info"),
+    ("gmail", "send"):        ("SEND",    "✉", "warning"),
+    ("gmail", "draft"):       ("DRAFT",   "📝", "info"),
+    ("gmail", "trash"):       ("TRASH",   "🗑", "warning"),
     ("gmail", None):          ("MAIL",    "📧", "info"),
 }
 
@@ -128,7 +184,7 @@ def _clean_label(tool: str, args: dict) -> tuple[str, str, str]:
         path = str(args.get("path", ""))
         hint = path.replace("\\", "/").rstrip("/").split("/")[-1] if path else ""
     elif tool == "gmail":
-        hint = str(args.get("query") or args.get("id") or "")
+        hint = str(args.get("to") or args.get("query") or args.get("id") or "")
     if len(hint) > 40:
         hint = hint[:37] + "..."
     return gerund, hint, style
@@ -207,11 +263,15 @@ class AgentDisplay:
                 spinner="dots", spinner_style="#7C5CFF",
             )
             self._status.start()
+            global _active_status
+            _active_status = self._status
 
     def stop(self) -> None:
         if self._status is not None:
             self._status.stop()
             self._status = None
+            global _active_status
+            _active_status = None
 
     def _update(self, text: Text) -> None:
         if self._status is not None:

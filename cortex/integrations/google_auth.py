@@ -9,8 +9,8 @@ Design:
     refresh-token is stored locally → persistent.
   - Multiple accounts, switchable: tokens live per-email; an `active.txt` pointer
     selects which one agents use. Switching = rewriting that pointer.
-  - All `google-*` imports are LAZY (inside functions) so cortex works without the
-    optional deps. Install with:  pip install ".[google]"
+  - All `google-*` imports are LAZY (inside functions) so an old install without
+    the google deps fails gracefully. They ship in core now (pip install -e ".").
 
 Storage under ~/.cortex/credentials/:
     google_client_secret.json   ← your OAuth client (copied on first connect)
@@ -25,7 +25,11 @@ from pathlib import Path
 
 from cortex.config import CREDENTIALS_DIR, Settings
 
-DEFAULT_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+DEFAULT_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",  # search / read
+    "https://www.googleapis.com/auth/gmail.send",      # send / draft
+    "https://www.googleapis.com/auth/gmail.modify",    # trash (recoverable)
+]
 
 _GOOGLE_DIR = CREDENTIALS_DIR / "google"
 _CLIENT_SECRET = CREDENTIALS_DIR / "google_client_secret.json"
@@ -174,7 +178,8 @@ def _imports():
         return InstalledAppFlow, Credentials, Request, build
     except ImportError as e:
         raise MissingDepsError(
-            "Soporte de Google no instalado. Instala con:  pip install \".[google]\"\n"
+            "Soporte de Google no instalado. Tu instalación es vieja — reinstala con:\n"
+            "  git pull && pip install -e \".[dev]\"\n"
             f"({e})"
         ) from e
 
@@ -241,7 +246,22 @@ def get_credentials(cfg: Settings, account: "str | None" = None):
         raise NotConnectedError(f"La cuenta '{email}' no está conectada.")
 
     scopes = cfg.gmail_scopes or DEFAULT_SCOPES
-    creds = Credentials.from_authorized_user_info(json.loads(tp.read_text(encoding="utf-8")), scopes)
+    token_info = json.loads(tp.read_text(encoding="utf-8"))
+
+    # A stored token only grants the scopes it was MINTED with. If the user upgraded
+    # cortex (new scopes: send/trash) but never reconnected, the old token is still
+    # read-only — fail loud and clear instead of letting the API 403 mid-task.
+    granted = set(token_info.get("scopes") or [])
+    missing = [s for s in scopes if s not in granted]
+    if missing:
+        short = ", ".join(s.rsplit("/", 1)[-1] for s in missing)
+        raise NotConnectedError(
+            f"La cuenta '{email}' no tiene los permisos: {short}.\n"
+            "Tu token es de una versión anterior (solo lectura). "
+            "Reconéctate para otorgar enviar/eliminar:  cortex connect gmail"
+        )
+
+    creds = Credentials.from_authorized_user_info(token_info, scopes)
 
     if not creds.valid:
         if creds.expired and creds.refresh_token:

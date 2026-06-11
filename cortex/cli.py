@@ -89,7 +89,12 @@ def run(
     if not no_banner:
         print_banner(model=cfg.effective_model(cloud=cloud), version=__version__)
     from cortex.agent import run as agent_run
-    agent_run(task=task, cfg=cfg, cloud=cloud, dry_run=dry_run, verbose=verbose, single=single)
+    try:
+        agent_run(task=task, cfg=cfg, cloud=cloud, dry_run=dry_run, verbose=verbose, single=single)
+    except KeyboardInterrupt:
+        console.print()
+        print_warning("⏹ Detenido por el usuario.")
+        raise typer.Exit(130)
 
 
 @app.command()
@@ -458,16 +463,23 @@ def chat(
                     _handle_slash(task)
                     continue
             ctx = _build_session_context()
-            result = agent_run(task=task, cfg=cfg, cloud=cloud, dry_run=False,
-                               verbose=state["verbose"], session_context=ctx)
+            try:
+                result = agent_run(task=task, cfg=cfg, cloud=cloud, dry_run=False,
+                                   verbose=state["verbose"], session_context=ctx)
+            except KeyboardInterrupt:
+                # Ctrl+C DURING a task → stop that task, stay in chat.
+                console.print()
+                print_warning("⏹ Tarea detenida. Sigues en el chat (Ctrl+C de nuevo o 'exit' para salir).")
+                continue
             # Store turn (trim oldest if over limit)
             session_turns.append({"task": task, "result": result or ""})
             if len(session_turns) > _MAX_SESSION_TURNS:
                 session_turns.pop(0)
             _session_indicator()
         except KeyboardInterrupt:
+            # Ctrl+C at the prompt (no task running) → leave chat.
             console.print()
-            print_info("Interrupted. 👋")
+            print_info("Bye. 👋")
             break
 
 
