@@ -72,3 +72,14 @@ cost_ref_output_per_1m = 15.0
 # Get key: https://ollama.com → Settings → API Keys
 # ollama_cloud_api_key = "ollama-sk-..."
 # Usage: cortex run -m ollama-cloud/llama3.3 "your task"
+
+# ── Integrations ────────────────────────────────────────────────────────────
+# Gmail: run `cortex connect gmail` (drops you a guided OAuth setup).
+#
+# Outlook / Microsoft 365: register a free Azure app, then set its client id here.
+#   portal.azure.com → Entra ID → App registrations → New registration
+#   (any org directory + personal accounts) → Authentication → Allow public client flows = Yes
+#   → API permissions → Graph → Delegated: Mail.Read, Mail.Send, Mail.ReadWrite, offline_access, User.Read
+# microsoft_client_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+# microsoft_tenant    = "common"   # common = work + personal; or your tenant id/domain
+# Then: cortex connect outlook

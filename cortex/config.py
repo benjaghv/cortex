@@ -114,6 +114,14 @@ class Settings(BaseSettings):
     memory_enabled: bool = Field(default=True, description="Persist + recall past tasks")
     memory_recall: int = Field(default=5, description="How many past entries to inject")
 
+    # ── Personality / tone ──────────────────────────────────────────────────────
+    freestyle: bool = Field(
+        default=True,
+        description="Looser tone: humor (incl. dark/edgy), no moralizing, no refusing benign "
+                    "edgy requests. This is a personal local tool — you set the vibe. "
+                    "Set False for a neutral, professional assistant.",
+    )
+
     # ── Display ─────────────────────────────────────────────────────────────────
     show_thinking: bool = Field(default=True)
     truncate_output: int = Field(default=2000)
@@ -134,6 +142,25 @@ class Settings(BaseSettings):
                     "Permanent delete is intentionally NOT granted.",
     )
     gmail_enabled: bool = Field(default=True, description="Expose the gmail tool to agents")
+
+    # ── Integrations: Microsoft / Outlook (Graph) ────────────────────────────────
+    microsoft_client_id: Optional[str] = Field(
+        default=None,
+        description="Application (client) ID of your Azure app registration (BYO). "
+                    "Required for Outlook/SharePoint. See `cortex connect outlook`.",
+    )
+    microsoft_tenant: str = Field(
+        default="common",
+        description="Azure tenant: 'common' (work+personal), 'organizations', "
+                    "'consumers', or your tenant id/domain.",
+    )
+    outlook_scopes: list[str] = Field(
+        default_factory=lambda: [
+            "Mail.Read", "Mail.Send", "Mail.ReadWrite", "User.Read", "offline_access",
+        ],
+        description="Microsoft Graph delegated scopes for Outlook.",
+    )
+    outlook_enabled: bool = Field(default=True, description="Expose the outlook tool to agents")
 
     @classmethod
     def load(cls) -> "Settings":

@@ -228,11 +228,11 @@ cortex version           Show version
 | Agent | Tools | Best for |
 |---|---|---|
 | **generalist** | all tools | simple or ambiguous tasks — default fallback |
-| **coder** | filesystem, shell, git, python_exec, document, pptx | files, scripts, code, git ops, Word docs, slides |
+| **coder** | filesystem, shell, git, python_exec, document, pdf, pptx | files, scripts, code, git ops, Word/PDF docs, slides |
 | **devops** | git, shell, filesystem, python_exec | repo management, commits, diffs |
 | **researcher** | search, web, browser, filesystem | web search, URL fetching, JS-heavy sites, job boards |
 | **data** | stock, weather, datetime, python_exec | live prices, weather, date math |
-| **comms** | gmail, search, web | read, summarize, send, draft + trash email; lookups |
+| **comms** | gmail, outlook, search, web | email (Gmail + Outlook): read, summarize, send, draft + trash; lookups |
 
 Each agent only sees its assigned tools — no accidental cross-contamination.
 
@@ -253,12 +253,14 @@ Each agent only sees its assigned tools — no accidental cross-contamination.
 | `datetime` | Current local date and time | No |
 | `python_exec` | Run a Python snippet, capture output | No |
 | `document` | Create formatted Word (.docx) or plain text files with headings, bullets, bold | No* |
+| `pdf` | Create formatted PDF documents — word-wrap, page breaks, headings, bullets, bold | No* |
 | `pptx` | Create PowerPoint (.pptx) presentations — 4 themes, layouts, speaker notes | No* |
-| `gmail` | Search, read, **send**, draft + **trash** email. Send/trash ask you to confirm first | OAuth* |
+| `gmail` | Search, read, **send**, draft + **trash** Gmail. Send/trash ask you to confirm first | OAuth* |
+| `outlook` | Search, read, **send**, draft + **trash** Outlook / Microsoft 365 email. Send/trash confirm first | OAuth* |
 
-> \* `document` (.docx), `pptx` (.pptx) and `gmail` deps ship with the base install — nothing extra.
+> \* `document` (.docx), `pdf` (.pdf), `pptx` (.pptx), `gmail` and `outlook` deps ship with the base install — nothing extra.
 > `browser` needs Chromium: run `cortex setup --install`.
-> `gmail` also needs a one-time `cortex connect gmail` (see [Connect external services](#connect-external-services-gmail)).
+> `gmail`/`outlook` need a one-time `cortex connect gmail` / `cortex connect outlook` (see [Connect external services](#connect-external-services-gmail)).
 
 ---
 
@@ -290,7 +292,8 @@ cortex/
     registry.py       → ToolRegistry: name → (schema, executor)
     filesystem.py     shell.py      git_tool.py   web.py
     browser.py        search.py     stock.py      weather.py
-    datetime_tool.py  python_exec.py  document.py  pptx.py  gmail.py
+    datetime_tool.py  python_exec.py  document.py  pdf.py  pptx.py
+    gmail.py          outlook.py
 ```
 
 > `~/.cortex/` — config, stats, memory, run logs. Auto-created, never committed.
@@ -426,6 +429,38 @@ cortex disconnect gmail you@gmail.com # remove an account
 
 Inside `cortex chat`, use `/account` to view or switch accounts on the fly. Tokens live in
 `~/.cortex/credentials/` (never committed).
+
+---
+
+## Connect Outlook / Microsoft 365
+
+Same idea as Gmail, but via **Microsoft Graph**. cortex can search, read, send, draft and
+trash your Outlook email. Send and trash always ask for a y/N confirmation.
+
+You bring your own free **Azure app registration** (one time):
+
+1. [portal.azure.com](https://portal.azure.com) → **Microsoft Entra ID** → **App registrations** → **New registration**
+   - Supported account types: *Accounts in any organizational directory and personal Microsoft accounts*
+2. **Authentication** → enable **Allow public client flows** = *Yes*
+3. **API permissions** → **Microsoft Graph** → **Delegated** → add: `Mail.Read`, `Mail.Send`,
+   `Mail.ReadWrite`, `offline_access`, `User.Read`
+4. Copy the **Application (client) ID** into `~/.cortex/config.toml`:
+   ```toml
+   microsoft_client_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+   ```
+5. Connect (device-code login — no browser redirect, no client secret):
+   ```bash
+   cortex connect outlook
+   ```
+   cortex prints a short code; open **microsoft.com/devicelogin**, paste it, approve. Done.
+
+```bash
+cortex run "resume mis correos de Outlook sin leer"
+cortex run "manda un correo desde Outlook a ana@empresa.com diciendo que llego en 10"  # confirma
+```
+
+> Tokens are cached in `~/.cortex/credentials/microsoft/` (never committed). `cortex connect outlook`
+> again to refresh or add another account. SharePoint support reuses this same Microsoft login.
 
 ---
 

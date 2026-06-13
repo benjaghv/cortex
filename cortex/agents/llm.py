@@ -9,10 +9,42 @@ and how to point Ollama at its base URL.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from cortex import stats
 from cortex.config import Settings
+
+_THINK_RE = re.compile(r"<think>.*?</think>", re.S | re.I)
+
+
+def strip_think(text: "str | None") -> str:
+    """Remove <think>…</think> reasoning blocks (qwen3, deepseek-r1, etc.).
+
+    Thinking models wrap their chain-of-thought in <think> tags; we only want the
+    final answer. Also handles a dangling, unclosed <think> (the model ran out of
+    tokens mid-thought) by dropping everything from it onward."""
+    if not text:
+        return text or ""
+    t = _THINK_RE.sub("", text)
+    low = t.lower()
+    if "<think>" in low and "</think>" not in low:
+        t = re.split(r"<think>", t, flags=re.I)[0]
+    return t.strip()
+
+
+def _no_think(model: str, messages: list[dict]) -> list[dict]:
+    """For qwen3 (Ollama), append the /no_think switch so it answers directly
+    instead of spending the whole token budget on hidden reasoning."""
+    if "qwen3" not in model.lower():
+        return messages
+    msgs = [dict(m) for m in messages]
+    for m in reversed(msgs):
+        if m.get("role") == "user" and isinstance(m.get("content"), str):
+            if "/no_think" not in m["content"]:
+                m["content"] = m["content"].rstrip() + " /no_think"
+            return msgs
+    return msgs
 
 
 def _is_ollama(model: str) -> bool:
@@ -29,13 +61,18 @@ def _is_cloud(model: str) -> bool:
 def _normalize_model(model: str) -> str:
     """Map user-facing model names to litellm model strings.
 
+    ollama/<name>        → ollama_chat/<name>  (use the /api/chat endpoint: it has
+                                                proper NATIVE tool-calling. The old
+                                                ollama/ → /api/generate path makes
+                                                models emit tool calls as plain text.)
     ollama-cloud/<name>  → ollama_chat/<name>  (api.ollama.com uses Ollama protocol)
     moonshot/glm/qwen-*  → openai/<name>       (OpenAI-compat endpoint)
-    ollama/*             → unchanged            (litellm knows ollama/ prefix)
     """
     if model.startswith("ollama-cloud/"):
         return f"ollama_chat/{model[len('ollama-cloud/'):]}"
-    if model.startswith("openai/") or model.startswith("ollama/") or model.startswith("ollama_chat/"):
+    if model.startswith("ollama/"):
+        return f"ollama_chat/{model[len('ollama/'):]}"
+    if model.startswith("openai/") or model.startswith("ollama_chat/"):
         return model
     if _is_cloud(model):
         return f"openai/{model}"
@@ -81,7 +118,7 @@ def complete_with_tools(model: str, messages: list[dict], schemas: list[dict], c
     litellm.drop_params = True
     resp = litellm.completion(
         model=m,
-        messages=messages,
+        messages=_no_think(model, messages),
         tools=schemas,
         tool_choice="auto",
         max_tokens=cfg.max_tokens,
@@ -109,7 +146,7 @@ def complete_no_tools(model: str, messages: list[dict], cfg: Settings):
     }]
     resp = litellm.completion(
         model=m,
-        messages=nudged,
+        messages=_no_think(model, nudged),
         max_tokens=cfg.max_tokens,
         temperature=0.0,
         api_base=_api_base(model, cfg),
@@ -127,10 +164,10 @@ def complete_json(model: str, system: str, user: str, cfg: Settings) -> str:
     litellm.drop_params = True
     resp = litellm.completion(
         model=m,
-        messages=[
+        messages=_no_think(model, [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
-        ],
+        ]),
         temperature=0.0,
         max_tokens=cfg.max_tokens,
         response_format={"type": "json_object"},
@@ -138,7 +175,7 @@ def complete_json(model: str, system: str, user: str, cfg: Settings) -> str:
         api_key=_api_key(model, cfg),
     )
     stats.record_completion(resp)
-    return resp.choices[0].message.content or "{}"
+    return strip_think(resp.choices[0].message.content) or "{}"
 
 
 def complete_text(model: str, system: str, user: str, cfg: Settings) -> str:
@@ -149,17 +186,17 @@ def complete_text(model: str, system: str, user: str, cfg: Settings) -> str:
     litellm.drop_params = True
     resp = litellm.completion(
         model=m,
-        messages=[
+        messages=_no_think(model, [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
-        ],
+        ]),
         temperature=0.2,
         max_tokens=cfg.max_tokens,
         api_base=_api_base(model, cfg),
         api_key=_api_key(model, cfg),
     )
     stats.record_completion(resp)
-    return resp.choices[0].message.content or ""
+    return strip_think(resp.choices[0].message.content) or ""
 
 
 def humanize(text: str) -> str:

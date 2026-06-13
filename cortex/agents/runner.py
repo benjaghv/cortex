@@ -22,31 +22,30 @@ from cortex.tools.registry import ToolRegistry
 
 _FAIL_PREFIXES = ("[ERROR]", "[BLOCKED]", "[EXIT", "[TIMEOUT]", "[GUARD]")
 
-_DOC_EXTS = (".docx", ".doc")
+# filesystem(write, <ext>) → the right document tool. Models often reach for
+# filesystem even when told to use document/pdf; this fixes it transparently.
+_EXT_TO_TOOL = {
+    ".docx": "document", ".doc": "document",
+    ".pdf": "pdf",
+}
 
 
 def _maybe_redirect_to_document(name: str, args: dict, registry: ToolRegistry) -> tuple[str, dict]:
-    """If model calls filesystem(write, *.docx) → silently redirect to document tool.
-
-    Models like qwen2.5-coder ignore the 'use document tool' rule and always reach
-    for filesystem. This intercept catches it at execution time and fixes it transparently.
-    """
+    """If model calls filesystem(write, *.docx/*.pdf) → redirect to the right tool."""
     if name != "filesystem":
         return name, args
     if args.get("action") != "write":
         return name, args
     path = str(args.get("path", ""))
-    if not any(path.lower().endswith(ext) for ext in _DOC_EXTS):
+    target = next((t for ext, t in _EXT_TO_TOOL.items() if path.lower().endswith(ext)), None)
+    if target is None or target not in registry:
         return name, args
-    if "document" not in registry:
-        return name, args
-    # Redirect: map filesystem write args → document args
     new_args = {
         "path": path,
         "content": args.get("content", ""),
         "title": args.get("title", ""),
     }
-    return "document", new_args
+    return target, new_args
 
 
 _GIT_ACTION_RE = None  # compiled lazily
@@ -124,20 +123,39 @@ def _gmail_ids_from_messages(messages: list) -> list:
     return ids
 
 
+def _json_blob(content: str) -> "str | None":
+    """Find a JSON object/array in model text: whole string, a ```json fence, or the
+    first balanced {...}/[...] block embedded in prose. Returns the raw JSON or None."""
+    import re
+    if not content:
+        return None
+    s = content.strip()
+    if s.startswith("[") or s.startswith("{"):
+        return s
+    # Fenced code block ```json ... ``` or ``` ... ```
+    m = re.search(r"```(?:json)?\s*(\[.*?\]|\{.*?\})\s*```", s, re.S | re.I)
+    if m:
+        return m.group(1)
+    # First balanced-looking block embedded in prose (greedy to the last closer)
+    for open_c, close_c in (("[", "]"), ("{", "}")):
+        i, j = s.find(open_c), s.rfind(close_c)
+        if 0 <= i < j:
+            return s[i:j + 1]
+    return None
+
+
 def _extract_text_tool_calls(content: str) -> "list[dict] | None":
     """Parse tool calls embedded in model text (models without native tool_calls support).
 
-    Handles the format some models (e.g. gemma3) emit as plain JSON:
+    Handles JSON the model emits as plain text, in a ```json fence, or buried in prose:
       [{"type":"search","function":{"name":"search","parameters":{"query":"..."}}}]
     or a plain dict for a single call. Returns list of {"name": str, "args": dict} or None.
     """
-    if not content:
-        return None
-    stripped = content.strip()
-    if not (stripped.startswith("[") or stripped.startswith("{")):
+    blob = _json_blob(content)
+    if blob is None:
         return None
     try:
-        data = json.loads(stripped)
+        data = json.loads(blob)
     except json.JSONDecodeError:
         return None
 
@@ -186,6 +204,9 @@ def run_agent(
     schemas = sub.schemas()
 
     system = preset.system_prompt
+    if getattr(cfg, "freestyle", False):
+        from cortex.agents.prompt_base import FREESTYLE_RULES
+        system = f"{system}{FREESTYLE_RULES}"
     if memory_block:
         system = f"{system}\n\n{memory_block}"
     if session_context:
@@ -198,6 +219,7 @@ def run_agent(
     steps: list[dict] = []
     force_answer = False
     tool_count = 0
+    gmail_trash_done = False  # idempotency: trash at most once per run
 
     emit(Event(agent=preset.name, kind="started", result=task))
 
@@ -215,6 +237,9 @@ def run_agent(
             return err
 
         msg = resp.choices[0].message
+        # Strip <think>…</think> (qwen3 / deepseek-r1) before we read the content.
+        if getattr(msg, "content", None):
+            msg.content = llm.strip_think(msg.content)
 
         if not msg.tool_calls:
             # Some models (gemma3, etc.) don't support native tool_calls — they emit
@@ -300,7 +325,8 @@ def run_agent(
             # instead of calling trash. Execute the trash now — its own gate still
             # asks the human y/N, so this is safe and skips the redundant text loop.
             gmail_exec = sub.executor("gmail")
-            if (gmail_exec and not force_answer and _task_wants_delete(task)):
+            if (gmail_exec and not force_answer and not gmail_trash_done
+                    and _task_wants_delete(task)):
                 ids = _gmail_ids_from_messages(messages)
                 if ids:
                     emit(Event(agent=preset.name, kind="tool_call",
@@ -323,6 +349,7 @@ def run_agent(
                     messages.append({"role": "user",
                                       "content": f"Trash executed. Result:\n{res}\n\n"
                                                  "Tell the user the outcome in one line."})
+                    gmail_trash_done = True
                     force_answer = True
                     continue
 
@@ -342,16 +369,27 @@ def run_agent(
             # Intercept: filesystem(write, *.docx) → document()
             name, args = _maybe_redirect_to_document(name, args, sub)
 
+            # Idempotency: if we already trashed this run, ignore any further trash
+            # calls (some models keep re-calling) — never prompt the user again.
+            if (name == "gmail" and isinstance(args, dict)
+                    and args.get("action") == "trash" and gmail_trash_done):
+                emit(Event(agent=preset.name, kind="tool_result", tool="gmail",
+                           result="ya movidos a la papelera (sin repetir)", ok=True))
+                messages.append({"role": "tool", "tool_call_id": tc.id,
+                                 "content": "Los correos YA se movieron a la papelera en este "
+                                            "turno. No vuelvas a borrar. Dile al usuario que ya "
+                                            "está hecho y termina."})
+                force_answer = True
+                break
+
             # Intercept: model trashes email ONE id at a time. Coalesce into a single
-            # batch (one confirmation) using ALL ids from the prior search, then stop.
-            coalesced_trash = False
+            # batch (one confirmation) using ALL ids from the prior search.
             if (name == "gmail" and isinstance(args, dict)
                     and args.get("action") == "trash" and not args.get("ids")
                     and _task_wants_delete(task)):
                 all_ids = _gmail_ids_from_messages(messages)
                 if len(all_ids) > 1:
                     args = {"action": "trash", "ids": all_ids}
-                    coalesced_trash = True
 
             emit(Event(agent=preset.name, kind="tool_call", tool=name, args=args))
             tool_count += 1
@@ -398,9 +436,11 @@ def run_agent(
             })
             messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
 
-            # Batched the whole delete into one call → don't let the model trash
-            # the remaining ids one by one. Force a final answer now.
-            if coalesced_trash:
+            # Mark trash as done so we never prompt again this run. A user 'N'
+            # (cancel) also counts — they decided; don't keep re-asking. Covers both
+            # the coalesced batch and a plain single trash.
+            if name == "gmail" and isinstance(args, dict) and args.get("action") == "trash":
+                gmail_trash_done = True
                 force_answer = True
                 break
 

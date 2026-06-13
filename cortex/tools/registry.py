@@ -23,6 +23,8 @@ from cortex.tools import (
     filesystem,
     git_tool,
     gmail,
+    outlook,
+    pdf,
     pptx,
     python_exec,
     search,
@@ -31,6 +33,8 @@ from cortex.tools import (
     weather,
     web,
 )
+# whatsapp tool kept in cortex/tools/whatsapp.py but unregistered for now
+# (WhatsApp Web automation was flaky / ban-risk). Re-add the import + entry to revive.
 
 Executor = Callable[[dict], str]
 
@@ -56,8 +60,10 @@ def _default_entries(cfg: Settings) -> dict[str, ToolEntry]:
         ("weather", weather.SCHEMA, lambda a: weather.execute(**a)),
         ("python_exec", python_exec.SCHEMA, lambda a: python_exec.execute(**a)),
         ("document",   document.SCHEMA,    lambda a: document.execute(**a)),
+        ("pdf",        pdf.SCHEMA,         lambda a: pdf.execute(**a)),
         ("pptx",       pptx.SCHEMA,        lambda a: pptx.execute(**a)),
         ("gmail",      gmail.SCHEMA,       lambda a: gmail.execute(settings=cfg, **a)),
+        ("outlook",    outlook.SCHEMA,     lambda a: outlook.execute(settings=cfg, **a)),
     ]
     return {name: ToolEntry(name, schema, ex) for name, schema, ex in raw}
 

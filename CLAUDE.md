@@ -23,6 +23,9 @@ cortex/
     google_auth.py → shared Google OAuth (BYO GCP client_secret). connect()/get_credentials()/
                      list_accounts()/set_active(). Tokens in ~/.cortex/credentials/google/<email>.json,
                      active.txt pointer. Lazy google-* imports. Persistent + switchable accounts.
+    microsoft_auth.py → shared Microsoft Graph OAuth (BYO Azure app, microsoft_client_id). MSAL
+                     device-code flow: connect(on_message)/get_token()/graph_get()/graph_post().
+                     Token cache per ~/.cortex/credentials/microsoft/<email>.json + active.txt. Lazy msal.
 
   agents/
     preset.py       → AgentPreset dataclass (name, description, system_prompt, tools, model?)
@@ -47,8 +50,10 @@ cortex/
     git_tool.py      → git ops with allowlist + blocked destructive patterns + retry
     browser.py       → Playwright headless Chromium (JS sites, job boards, SPAs)
     document.py      → create .docx (python-docx) / .txt from markdown-ish content
+    pdf.py           → create .pdf (reportlab Platypus): markdown → headings/bullets/wrap/page-breaks
     pptx.py          → create .pptx (python-pptx) from a list of slide specs, 4 themes
-    gmail.py         → read-only Gmail (search/read) via integrations.google_auth; settings=cfg like shell
+    gmail.py         → Gmail (search/read/send/draft/trash) via integrations.google_auth; settings=cfg like shell
+    outlook.py       → Outlook/M365 email (search/read/send/draft/trash) via integrations.microsoft_auth (Graph REST)
 
 tests/
     test_tools.py    → tool logic only, no LLM/network

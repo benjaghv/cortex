@@ -129,6 +129,7 @@ _VERBS = {
     ("weather", None):        ("WEATHER", "☼", "info"),
     ("python_exec", None):    ("PYTHON",  "▶", "tool.name"),
     ("document", None):       ("DOC",     "📄", "warning"),
+    ("pdf", None):            ("PDF",     "📕", "warning"),
     ("pptx", None):           ("SLIDES",  "▭", "warning"),
     ("gmail", "search"):      ("MAIL",    "📧", "info"),
     ("gmail", "read"):        ("MAIL",    "📧", "info"),
@@ -136,6 +137,10 @@ _VERBS = {
     ("gmail", "draft"):       ("DRAFT",   "📝", "info"),
     ("gmail", "trash"):       ("TRASH",   "🗑", "warning"),
     ("gmail", None):          ("MAIL",    "📧", "info"),
+    ("outlook", "send"):      ("SEND",    "✉", "warning"),
+    ("outlook", "draft"):     ("DRAFT",   "📝", "info"),
+    ("outlook", "trash"):     ("TRASH",   "🗑", "warning"),
+    ("outlook", None):        ("OUTLOOK", "📨", "info"),
 }
 
 
@@ -180,10 +185,10 @@ def _clean_label(tool: str, args: dict) -> tuple[str, str, str]:
         hint = str(args.get("symbol", "")).upper()
     elif tool == "weather":
         hint = str(args.get("city", ""))
-    elif tool in ("document", "pptx"):
+    elif tool in ("document", "pptx", "pdf"):
         path = str(args.get("path", ""))
         hint = path.replace("\\", "/").rstrip("/").split("/")[-1] if path else ""
-    elif tool == "gmail":
+    elif tool in ("gmail", "outlook"):
         hint = str(args.get("to") or args.get("query") or args.get("id") or "")
     if len(hint) > 40:
         hint = hint[:37] + "..."

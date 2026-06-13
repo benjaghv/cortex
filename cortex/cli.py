@@ -300,7 +300,7 @@ def chat(
             print_info(f"Verbose {'ON — showing every step' if state['verbose'] else 'OFF — clean mode'}")
             return True
 
-        # /connect [gmail] [path/to/client_secret.json] — OAuth a Google account in-session
+        # /connect [gmail|outlook] [path/to/client_secret.json] — OAuth in-session
         if slug == "/connect":
             cargs = arg.split()
             service = cargs[0] if cargs else "gmail"
@@ -308,25 +308,72 @@ def chat(
             _run_connect(cfg, service, secret)
             return True
 
-        # /account [email] — show or switch the active Google account
+        # /disconnect <gmail|outlook> [email] — remove a connected account
+        if slug == "/disconnect":
+            cargs = arg.split()
+            svc = (cargs[0] if cargs else "gmail").lower()
+            target_email = cargs[1] if len(cargs) > 1 else None
+            if svc in ("outlook", "microsoft", "office365", "o365"):
+                from cortex.integrations import microsoft_auth as ms
+                target = target_email or ms.active_account()
+                if target and ms.disconnect(target):
+                    print_success(f"Desconectada: {target}")
+                else:
+                    print_warning("No había cuenta de Outlook conectada.")
+            else:
+                from cortex.integrations import google_auth
+                target = target_email or google_auth.active_account()
+                if target and google_auth.disconnect(target):
+                    print_success(f"Desconectada: {target}")
+                else:
+                    print_warning("No había cuenta de Gmail conectada.")
+            return True
+
+        # /account [email] — show or switch the active Gmail / Outlook account
         if slug in ("/account", "/accounts"):
             from cortex.integrations import google_auth
+            try:
+                from cortex.integrations import microsoft_auth
+            except Exception:
+                microsoft_auth = None
             if arg:
+                # Switch in whichever store knows this email.
+                done = False
                 try:
                     google_auth.set_active(arg)
-                    print_success(f"Cuenta activa → {arg}")
-                except google_auth.GoogleAuthError as e:
-                    print_error(str(e))
+                    print_success(f"Cuenta activa (Gmail) → {arg}")
+                    done = True
+                except google_auth.GoogleAuthError:
+                    pass
+                if not done and microsoft_auth:
+                    try:
+                        microsoft_auth.set_active(arg)
+                        print_success(f"Cuenta activa (Outlook) → {arg}")
+                        done = True
+                    except Exception:
+                        pass
+                if not done:
+                    print_error(f"La cuenta '{arg}' no está conectada.")
                 return True
-            accs = google_auth.list_accounts()
-            active = google_auth.active_account()
-            if not accs:
-                print_info("No hay cuentas conectadas. Conéctate con:  cortex connect gmail")
+
+            g_accs = google_auth.list_accounts()
+            g_active = google_auth.active_account()
+            m_accs = microsoft_auth.list_accounts() if microsoft_auth else []
+            m_active = microsoft_auth.active_account() if microsoft_auth else None
+            if not g_accs and not m_accs:
+                print_info("No hay cuentas conectadas. Conéctate con:  cortex connect gmail  o  cortex connect outlook")
                 return True
             console.print()
-            for a in accs:
-                mark = "  [bold #4ADE80]← activa[/]" if a == active else ""
-                console.print(f"    [#22D3EE]•[/] {a}{mark}")
+            if g_accs:
+                console.print("  [bold #7C5CFF]Gmail[/]")
+                for a in g_accs:
+                    mark = "  [bold #4ADE80]← activa[/]" if a == g_active else ""
+                    console.print(f"    [#22D3EE]•[/] {a}{mark}")
+            if m_accs:
+                console.print("  [bold #7C5CFF]Outlook[/]")
+                for a in m_accs:
+                    mark = "  [bold #4ADE80]← activa[/]" if a == m_active else ""
+                    console.print(f"    [#22D3EE]•[/] {a}{mark}")
             console.print("  [dim]Cambiar: /account <email>[/]\n")
             return True
 
@@ -342,10 +389,12 @@ def chat(
             console.print("  [#22D3EE]/repo[/]            — show current repo path")
             console.print("  [#22D3EE]/verbose[/]         — toggle verbose / clean mode")
             console.print("  [#22D3EE]/voice[/]           — dictate your next prompt by speaking")
-            console.print("  [#22D3EE]/connect gmail[/]   — connect a Gmail account (browser OAuth)")
-            console.print("  [#22D3EE]/account [email][/] — show or switch active Google account")
-            console.print("  [#22D3EE]/dry-run <task>[/]  — plan without executing")
-            console.print("  [#22D3EE]exit[/]             — quit")
+            console.print("  [#22D3EE]/connect gmail[/]      — connect a Gmail account (browser OAuth)")
+            console.print("  [#22D3EE]/connect outlook[/]    — connect an Outlook / Microsoft 365 account (device code)")
+            console.print("  [#22D3EE]/disconnect outlook[/] — remove the connected Outlook account")
+            console.print("  [#22D3EE]/account[/] \\[email]    — show or switch active Gmail / Outlook account")
+            console.print("  [#22D3EE]/dry-run <task>[/]     — plan without executing")
+            console.print("  [#22D3EE]exit[/]                — quit")
             console.print()
             return True
 
@@ -701,10 +750,10 @@ def _guided_gmail_setup(cfg) -> None:
         return
     try:
         ans = Prompt.ask("  ¿Abro las páginas de Google Cloud y espero el archivo por ti?",
-                         choices=["s", "n"], default="s")
+                         choices=["s", "n"], default="s", show_default=False).strip().lower()
     except Exception:
         return
-    if ans.strip().lower() != "s":
+    if ans not in ("", "s", "si", "sí", "y", "yes"):
         return
 
     # First, only the Clients page so they create the Desktop OAuth client.
@@ -763,8 +812,12 @@ def _guided_gmail_setup(cfg) -> None:
 
 def _run_connect(cfg, service: str, client_secret: "str | None") -> None:
     """Shared connect flow used by `cortex connect` and the chat /connect command."""
-    if service.lower() not in ("gmail", "google"):
-        print_error(f"Servicio '{service}' no soportado todavía. Disponible: gmail")
+    svc = service.lower()
+    if svc in ("outlook", "microsoft", "office365", "o365"):
+        _run_connect_outlook(cfg)
+        return
+    if svc not in ("gmail", "google"):
+        print_error(f"Servicio '{service}' no soportado todavía. Disponible: gmail, outlook")
         return
     from cortex.integrations import google_auth
     # No OAuth client anywhere yet → launch the guided assistant (open pages + watch).
@@ -800,12 +853,140 @@ def _run_connect(cfg, service: str, client_secret: "str | None") -> None:
             print_error(f"{type(e).__name__}: {e}")
 
 
+def _save_config_key(key: str, value: str) -> None:
+    """Upsert a single key into ~/.cortex/config.toml, preserving the rest."""
+    import toml
+    data = {}
+    if CONFIG_FILE.exists():
+        try:
+            data = toml.load(CONFIG_FILE)
+        except Exception:
+            data = {}
+    data[key] = value
+    CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    CONFIG_FILE.write_text(toml.dumps(data), encoding="utf-8")
+
+
+def _guided_outlook_setup(cfg) -> "str | None":
+    """Walk the user through the one-time Azure app registration, paste the client id
+    inline, save it to config, and return it. None if cancelled."""
+    import re
+    import sys
+    import webbrowser
+    from rich.panel import Panel
+    from rich.text import Text
+
+    t = Text()
+    t.append("Para conectar Outlook necesitas registrar una app en Azure. Se hace ", "white")
+    t.append("UNA sola vez", "bold #FACC15")
+    t.append(" y es gratis. Te abro las páginas y me pegas el ID al final.\n\n", "white")
+
+    def step(n, *parts):
+        t.append(f"  {n}  ", "bold #22D3EE")
+        for txt, st in parts:
+            t.append(txt, st)
+        t.append("\n")
+
+    step("1.", ("New registration", "bold"), (" → nombre cualquiera (ej. 'cortex').", "white"))
+    step("  ", ("Supported account types: ", "white"),
+         ("'cualquier organización + cuentas personales'", "bold"), (".", "white"))
+    step("2.", ("Authentication", "bold"), (" → abajo, ", "white"),
+         ("'Allow public client flows' = Yes", "bold"), (" → Save.", "white"))
+    step("3.", ("API permissions", "bold"), (" → Add → Microsoft Graph → Delegated → agrega:\n", "white"),
+         ("       Mail.Read, Mail.Send, Mail.ReadWrite, offline_access, User.Read", "bold"))
+    step("4.", ("En el ", "white"), ("Overview", "bold"),
+         (" copia el ", "white"), ("Application (client) ID", "bold"),
+         (" y pégalo aquí abajo.", "white"))
+
+    console.print()
+    console.print(Panel(t, title=Text("⬡ Conectar Outlook — configuración inicial (una vez)",
+                                       style="bold #22D3EE"),
+                        border_style="border", padding=(0, 2)))
+
+    if not sys.stdin.isatty():
+        print_info("Cuando tengas el client ID, ponlo en config y corre: cortex connect outlook")
+        return None
+
+    try:
+        ans = Prompt.ask("  ¿Abro la página de Azure (App registrations) por ti?",
+                         choices=["s", "n"], default="s", show_default=False).strip().lower()
+    except Exception:
+        return None
+    if ans in ("", "s", "si", "sí", "y", "yes"):
+        for url in (
+            "https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/CreateApplicationBlade",
+            "https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade",
+        ):
+            try:
+                webbrowser.open(url)
+                break
+            except Exception:
+                continue
+
+    console.print("\n  [dim]Cuando tengas el Application (client) ID, pégalo. Ctrl+C para cancelar.[/]")
+    guid_re = re.compile(r"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$")
+    try:
+        for _ in range(3):
+            cid = Prompt.ask("  Application (client) ID").strip()
+            if guid_re.match(cid):
+                break
+            print_warning("Eso no parece un client ID (xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx). Reintenta.")
+        else:
+            print_error("No ingresaste un client ID válido. Corre de nuevo: cortex connect outlook")
+            return None
+    except (KeyboardInterrupt, EOFError):
+        console.print("\n  [dim]Cancelado.[/]\n")
+        return None
+
+    _save_config_key("microsoft_client_id", cid)
+    cfg.microsoft_client_id = cid
+    print_success("Client ID guardado en ~/.cortex/config.toml")
+    return cid
+
+
+def _run_connect_outlook(cfg) -> None:
+    """Guided, step-by-step device-code login for Outlook / Microsoft 365."""
+    import webbrowser
+    from rich.panel import Panel
+    from rich.text import Text
+    from cortex.integrations import microsoft_auth as ms
+
+    # No Azure app yet → run the guided setup (opens pages + paste id inline).
+    if not getattr(cfg, "microsoft_client_id", None):
+        if not _guided_outlook_setup(cfg):
+            return
+
+    def show(msg: str) -> None:
+        try:
+            webbrowser.open("https://microsoft.com/devicelogin")
+        except Exception:
+            pass
+        console.print()
+        console.print(Panel(Text(msg, style="bold white"),
+                            title=Text("⬡ Inicia sesión en Microsoft", style="bold #22D3EE"),
+                            border_style="border", padding=(0, 2)))
+        console.print("  [dim]Te abrí la página. Pega el código, elige tu cuenta y aprueba. "
+                      "Esperando…[/]\n")
+
+    try:
+        email = ms.connect(cfg, on_message=show)
+        print_success(f"Conectado: {email}  (cuenta activa)")
+        console.print("  [dim]Token guardado en ~/.cortex/credentials/microsoft/ — nunca se commitea.[/]")
+        console.print("  [dim]Prueba:[/] [bold]resume mis últimos correos de Outlook[/]\n")
+    except ms.MissingClientIdError as e:
+        print_error(str(e))
+    except ms.MicrosoftAuthError as e:
+        print_error(str(e))
+    except Exception as e:
+        print_error(f"{type(e).__name__}: {e}")
+
+
 @app.command()
 def connect(
-    service: str = typer.Argument("gmail", help="Service to connect (gmail / google)."),
+    service: str = typer.Argument("gmail", help="Service to connect (gmail / outlook)."),
     client_secret: Optional[str] = typer.Option(
         None, "--client-secret", "-c",
-        help="Path to your Google Cloud OAuth client_secret.json (first time only)."),
+        help="Path to your Google Cloud OAuth client_secret.json (gmail, first time only)."),
 ):
     """Connect a third-party account (opens your browser). Persistent + switchable."""
     cfg = Settings.load()
@@ -830,26 +1011,54 @@ def accounts(
 
     accs = google_auth.list_accounts()
     active = google_auth.active_account()
+    # Microsoft / Outlook accounts (separate store).
+    try:
+        from cortex.integrations import microsoft_auth
+        ms_accs = microsoft_auth.list_accounts()
+        ms_active = microsoft_auth.active_account()
+    except Exception:
+        ms_accs, ms_active = [], None
+
     console.print()
-    if not accs:
-        console.print("  [dim]No hay cuentas conectadas.[/]  Conecta una con:  [bold]cortex connect gmail[/]\n")
+    if not accs and not ms_accs:
+        console.print("  [dim]No hay cuentas conectadas.[/]  Conéctate con:  "
+                      "[bold]cortex connect gmail[/]  o  [bold]cortex connect outlook[/]\n")
         return
-    console.print("  [bold #7C5CFF]Cuentas de Google conectadas[/]")
-    for a in accs:
-        mark = "  [bold #4ADE80]← activa[/]" if a == active else ""
-        console.print(f"    [#22D3EE]•[/] {a}{mark}")
-    console.print("\n  [dim]Cambiar:[/] [bold]cortex accounts --use <email>[/]  ·  "
-                  "[dim]quitar:[/] [bold]cortex disconnect gmail <email>[/]\n")
+    if accs:
+        console.print("  [bold #7C5CFF]Cuentas de Google (Gmail)[/]")
+        for a in accs:
+            mark = "  [bold #4ADE80]← activa[/]" if a == active else ""
+            console.print(f"    [#22D3EE]•[/] {a}{mark}")
+    if ms_accs:
+        console.print("  [bold #7C5CFF]Cuentas de Microsoft (Outlook)[/]")
+        for a in ms_accs:
+            mark = "  [bold #4ADE80]← activa[/]" if a == ms_active else ""
+            console.print(f"    [#22D3EE]•[/] {a}{mark}")
+    console.print("\n  [dim]Reconectar/cambiar:[/] [bold]cortex connect outlook[/]  ·  "
+                  "[dim]quitar:[/] [bold]cortex disconnect outlook <email>[/]\n")
 
 
 @app.command()
 def disconnect(
-    service: str = typer.Argument("gmail", help="Service (gmail / google)."),
+    service: str = typer.Argument("gmail", help="Service (gmail / outlook)."),
     email: Optional[str] = typer.Argument(None, help="Account to remove (default: active)."),
 ):
     """Disconnect a connected account (deletes its local token)."""
+    svc = service.lower()
+    if svc in ("outlook", "microsoft", "office365", "o365"):
+        from cortex.integrations import microsoft_auth as ms
+        target = email or ms.active_account()
+        if not target:
+            print_warning("No hay ninguna cuenta de Outlook conectada.")
+            return
+        if ms.disconnect(target):
+            print_success(f"Desconectada: {target}")
+        else:
+            print_warning(f"La cuenta '{target}' no estaba conectada.")
+        return
+
     from cortex.integrations import google_auth
-    if service.lower() not in ("gmail", "google"):
+    if svc not in ("gmail", "google"):
         print_error(f"Servicio '{service}' no soportado.")
         return
     target = email or google_auth.active_account()
@@ -867,6 +1076,7 @@ _TOOL_DEPS = [
     ("Word .docx  (document)",      "docx",               [],            ""),
     ("PowerPoint .pptx  (pptx)",    "pptx",               [],            ""),
     ("Gmail  (gmail)",              "googleapiclient",    [],            ""),
+    ("Outlook  (outlook)",          "msal",               [],            ""),
     ("Voice transcription",         "speech_recognition", [],            ""),
     ("Voice microphone  (pyaudio)", "pyaudio",            ["pyaudio"],
      "Mac: brew install portaudio  ·  Linux: sudo apt install portaudio19-dev"),

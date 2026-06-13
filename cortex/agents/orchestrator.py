@@ -78,7 +78,7 @@ _DOC_KEYWORDS = ("word", ".docx", "documento", "document", "crea un word",
                  "escríbeme un", "escribe un documento", "write a doc")
 
 # Email workflows are sequential (read → compose → send) → single agent
-_EMAIL_KEYWORDS = ("correo", "email", "gmail", "inbox", "bandeja", "mail")
+_EMAIL_KEYWORDS = ("correo", "email", "gmail", "outlook", "inbox", "bandeja", "mail")
 
 
 def _looks_simple(task: str) -> bool:
@@ -147,8 +147,8 @@ _TOOL_SIGNALS = (
     # version control — these questions need the git tool, never a chat reply
     "github", "repositorio", "commit", "git status", "git log",
     "cambios subidos", "últimos cambios", "ultimos cambios", "rama main",
-    # email — needs the gmail tool
-    "correo", "correos", "email", "emails", "gmail", "inbox", "bandeja",
+    # email — needs the gmail/outlook tool
+    "correo", "correos", "email", "emails", "gmail", "outlook", "inbox", "bandeja",
     "no leídos", "no leidos", "unread",
 )
 
@@ -341,6 +341,9 @@ def _answer_directly(task: str, cfg: Settings, cloud: bool, verbose: bool,
         "a URL), say briefly what you'd need to fetch instead of inventing it. "
         "Answer in readable markdown, in the SAME language the user wrote in."
     )
+    if getattr(cfg, "freestyle", False):
+        from cortex.agents.prompt_base import FREESTYLE_RULES
+        system += FREESTYLE_RULES
     if mem_block:
         system += "\n\n" + mem_block
     if session_context:

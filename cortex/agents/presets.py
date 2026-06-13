@@ -39,6 +39,12 @@ _TOOL_DESC = {
         "Use for ANY request to 'write a Word doc', 'create a .docx', or 'make a document with formatting'. "
         "Pass title + content with markdown-style headings (# ## ###), **bold**, and - bullet lines."
     ),
+    "pdf": (
+        "pdf: create a formatted PDF document. "
+        "Use for ANY request to 'make a PDF', 'export to PDF', 'create a .pdf', or a printable "
+        "report/invoice/letter. Pass title + content with markdown-style headings (# ## ###), "
+        "- bullets, 1. numbered lists, **bold**, *italic*."
+    ),
     "pptx": (
         "pptx: create a PowerPoint (.pptx) presentation. "
         "Use for ANY request to 'make a presentation', 'create slides', 'a deck', 'una presentación'. "
@@ -53,6 +59,13 @@ _TOOL_DESC = {
         "action='draft' (to, subject, body) saves a draft without sending; "
         "action='trash' (id) moves a message to Trash — the user is asked to confirm first. "
         "Send and trash ALWAYS prompt the user for confirmation; just call the tool, the gate is automatic."
+    ),
+    "outlook": (
+        "outlook: read AND manage the user's Outlook / Microsoft 365 email (mirror of gmail). "
+        "Use for ANY request mentioning Outlook or a Microsoft/Office 365 email account. "
+        "action='search' (query); action='read' (id); action='send' (to, subject, body) — confirms first; "
+        "action='draft' (to, subject, body); action='trash' (id or ids=[...]) — confirms first. "
+        "Send and trash ALWAYS prompt for confirmation; just call the tool, the gate is automatic."
     ),
 }
 
@@ -90,7 +103,7 @@ _register(_make(
     name="coder",
     description="Reads/writes code and files, runs shell commands, Python scripts, and git operations.",
     role_intro="You are cortex's coding specialist. You work with local files, the shell, Python, and git.",
-    tools=("filesystem", "shell", "git", "python_exec", "document", "pptx"),
+    tools=("filesystem", "shell", "git", "python_exec", "document", "pdf", "pptx"),
     role_rules=(
         "- Stay on the coding/files/scripts task you were given; do not browse the web.\n"
         "- Prefer filesystem over shell for reading/writing files.\n"
@@ -146,14 +159,19 @@ _register(_make(
 
 _register(_make(
     name="comms",
-    description="Reads, summarizes, sends, drafts and trashes the user's email (Gmail); web lookups.",
-    role_intro="You are cortex's communications specialist. You manage the user's inbox: read, summarize, send, draft and clean up email.",
-    tools=("gmail", "search", "web"),
+    description="Manages the user's email (Gmail + Outlook): read, summarize, send, draft, trash; web lookups.",
+    role_intro="You are cortex's communications specialist. You manage the user's email: read, summarize, send, draft and clean up messages.",
+    tools=("gmail", "outlook", "search", "web"),
     role_rules=(
+        "- Gmail / Google email → 'gmail' tool. Outlook / Microsoft 365 email → 'outlook' tool. "
+        "If unspecified, prefer whichever account the user has connected.\n"
         "- Email / inbox / correo → use the 'gmail' tool.\n"
         "- Read: action='search' (Gmail query: is:unread, from:, subject:, newer_than:7d) then "
         "action='read' with the message id from search results.\n"
         "- Send: action='send' (to, subject, body). To save without sending: action='draft'.\n"
+        "- When WRITING an email: NEVER leave bracketed placeholders like [Su Nombre], [Tu Nombre] "
+        "or [Empresa]. Either use a real value or omit the line entirely. A clean, natural message "
+        "with no placeholders is less likely to be flagged as spam.\n"
         "- ALWAYS action='search' FIRST to get REAL message ids. NEVER invent or guess ids — "
         "the only valid ids come from a search result in this conversation.\n"
         "- Delete: action='trash'. For ONE email pass id=. For SEVERAL pass ids=[...] in a "
@@ -178,10 +196,16 @@ _register(_make(
         "NEVER use filesystem for Word files. Pass title= and content= with # headings, - bullets, **bold**.\n"
         "- CRITICAL: 'presentación', 'presentation', 'slides', 'deck', '.pptx' → ALWAYS use 'pptx' tool. "
         "Pass path= and slides= (list of {title, content:[bullets], layout}). NEVER use filesystem for slides.\n"
+        "- CRITICAL: 'PDF', '.pdf', 'export to PDF' → ALWAYS use 'pdf' tool. "
+        "Pass path= (.pdf), title=, content= with # headings, - bullets, **bold**. NEVER use filesystem for PDFs.\n"
         "- Email / inbox / correo / Gmail → use the 'gmail' tool: action='search' (Gmail query), "
         "action='read' (id), action='send'/'draft' (to, subject, body), action='trash' (id, or "
         "ids=[...] for MANY in one call). send and trash auto-prompt the user to confirm — just "
         "call the tool. The tool HAS send+trash permission; never claim you need more access.\n"
+        "- Outlook / Microsoft 365 email → use the 'outlook' tool (same actions as gmail: "
+        "search/read/send/draft/trash). send and trash auto-prompt to confirm.\n"
+        "- When writing an email, NEVER leave bracketed placeholders like [Su Nombre] or "
+        "[Empresa]. Use a real value or omit the line — placeholders look like spam.\n"
         + _BROWSER_RULE
     ),
 ))
