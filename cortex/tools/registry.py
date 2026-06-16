@@ -28,6 +28,7 @@ from cortex.tools import (
     pptx,
     python_exec,
     search,
+    sharepoint,
     shell,
     stock,
     weather,
@@ -64,6 +65,7 @@ def _default_entries(cfg: Settings) -> dict[str, ToolEntry]:
         ("pptx",       pptx.SCHEMA,        lambda a: pptx.execute(**a)),
         ("gmail",      gmail.SCHEMA,       lambda a: gmail.execute(settings=cfg, **a)),
         ("outlook",    outlook.SCHEMA,     lambda a: outlook.execute(settings=cfg, **a)),
+        ("sharepoint", sharepoint.SCHEMA,  lambda a: sharepoint.execute(settings=cfg, **a)),
     ]
     return {name: ToolEntry(name, schema, ex) for name, schema, ex in raw}
 

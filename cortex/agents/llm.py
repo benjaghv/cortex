@@ -51,6 +51,16 @@ def _is_ollama(model: str) -> bool:
     return "ollama" in model
 
 
+def _ctx_kwargs(model: str, cfg: Settings) -> dict:
+    """Extra kwargs per provider. For local Ollama, set num_ctx so big file writes
+    don't get truncated by a small default context window."""
+    if model.startswith("ollama/") or model.startswith("ollama_chat/"):
+        nc = getattr(cfg, "num_ctx", None)
+        if nc:
+            return {"num_ctx": int(nc)}
+    return {}
+
+
 def _is_cloud(model: str) -> bool:
     """True for any non-Ollama provider we route to a custom api_base."""
     if _is_ollama(model):
@@ -125,6 +135,7 @@ def complete_with_tools(model: str, messages: list[dict], schemas: list[dict], c
         temperature=cfg.temperature,
         api_base=_api_base(model, cfg),
         api_key=_api_key(model, cfg),
+        **_ctx_kwargs(m, cfg),
     )
     stats.record_completion(resp)
     return resp
@@ -151,6 +162,7 @@ def complete_no_tools(model: str, messages: list[dict], cfg: Settings):
         temperature=0.0,
         api_base=_api_base(model, cfg),
         api_key=_api_key(model, cfg),
+        **_ctx_kwargs(m, cfg),
     )
     stats.record_completion(resp)
     return resp
@@ -173,6 +185,7 @@ def complete_json(model: str, system: str, user: str, cfg: Settings) -> str:
         response_format={"type": "json_object"},
         api_base=_api_base(model, cfg),
         api_key=_api_key(model, cfg),
+        **_ctx_kwargs(m, cfg),
     )
     stats.record_completion(resp)
     return strip_think(resp.choices[0].message.content) or "{}"
@@ -194,6 +207,7 @@ def complete_text(model: str, system: str, user: str, cfg: Settings) -> str:
         max_tokens=cfg.max_tokens,
         api_base=_api_base(model, cfg),
         api_key=_api_key(model, cfg),
+        **_ctx_kwargs(m, cfg),
     )
     stats.record_completion(resp)
     return strip_think(resp.choices[0].message.content) or ""

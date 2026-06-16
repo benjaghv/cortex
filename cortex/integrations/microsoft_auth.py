@@ -41,6 +41,8 @@ DEFAULT_SCOPES = [
     "Mail.Read",
     "Mail.Send",
     "Mail.ReadWrite",
+    "Sites.Read.All",        # SharePoint: read sites + files
+    "Files.ReadWrite.All",   # SharePoint/OneDrive: read + write files
     "User.Read",
     "offline_access",
 ]
@@ -72,7 +74,7 @@ _SETUP_HINT = (
     "     (Supported account types: cualquier organización + cuentas personales)\n"
     "  2. Authentication → 'Allow public client flows' = Yes\n"
     "  3. API permissions → Microsoft Graph → Delegated → Mail.Read, Mail.Send,\n"
-    "     Mail.ReadWrite, offline_access, User.Read\n"
+    "     Mail.ReadWrite, Sites.Read.All, Files.ReadWrite.All, offline_access, User.Read\n"
     "  4. Copia el 'Application (client) ID' y ponlo en ~/.cortex/config.toml:\n"
     "       microsoft_client_id = \"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\"\n"
     "  5. Corre:  cortex connect outlook"
@@ -263,5 +265,29 @@ def graph_post(cfg: Settings, path: str, json_body: "dict | None" = None,
     url = path if path.startswith("http") else f"{GRAPH}{path}"
     with httpx.Client(timeout=30) as c:
         r = c.post(url, json=json_body, headers=_headers(cfg, account, headers))
+        r.raise_for_status()
+        return r.json() if r.content else {}
+
+
+def graph_get_bytes(cfg: Settings, path: str, account: "str | None" = None) -> bytes:
+    """GET raw bytes (file content / download). Follows the redirect Graph returns."""
+    import httpx
+    url = path if path.startswith("http") else f"{GRAPH}{path}"
+    token = get_token(cfg, account)
+    with httpx.Client(timeout=60, follow_redirects=True) as c:
+        r = c.get(url, headers={"Authorization": f"Bearer {token}"})
+        r.raise_for_status()
+        return r.content
+
+
+def graph_put_bytes(cfg: Settings, path: str, data: bytes, account: "str | None" = None,
+                    content_type: str = "application/octet-stream") -> dict:
+    """PUT raw bytes (small-file upload, <4 MB)."""
+    import httpx
+    url = path if path.startswith("http") else f"{GRAPH}{path}"
+    token = get_token(cfg, account)
+    with httpx.Client(timeout=120) as c:
+        r = c.put(url, content=data,
+                  headers={"Authorization": f"Bearer {token}", "Content-Type": content_type})
         r.raise_for_status()
         return r.json() if r.content else {}

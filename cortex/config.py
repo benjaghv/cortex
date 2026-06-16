@@ -36,9 +36,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CORTEX_", env_file=".env")
 
     # ── LLM ────────────────────────────────────────────────────────────────────
-    model: str = Field(default="ollama/qwen2.5-coder:7b", description="LiteLLM model string")
+    model: str = Field(default="ollama/qwen3:8b", description="LiteLLM model string")
     ollama_base_url: str = Field(default="http://localhost:11434")
-    max_tokens: int = Field(default=4096)
+    max_tokens: int = Field(default=8192, description="Max OUTPUT tokens. Big enough to write a "
+                            "full file (e.g. an HTML page) in one tool call.")
+    num_ctx: int = Field(default=16384, description="Ollama context window (num_ctx). Must fit "
+                         "system prompt + conversation + the file being written. Larger = needs "
+                         "more VRAM. Only applies to local Ollama models.")
     temperature: float = Field(default=0.1, description="Low temp = more deterministic tool use")
     max_iterations: int = Field(default=20, description="Max agent loop iterations")
 
@@ -156,11 +160,15 @@ class Settings(BaseSettings):
     )
     outlook_scopes: list[str] = Field(
         default_factory=lambda: [
-            "Mail.Read", "Mail.Send", "Mail.ReadWrite", "User.Read", "offline_access",
+            "Mail.Read", "Mail.Send", "Mail.ReadWrite",
+            "Sites.Read.All", "Files.ReadWrite.All",  # SharePoint / OneDrive
+            "User.Read", "offline_access",
         ],
-        description="Microsoft Graph delegated scopes for Outlook.",
+        description="Microsoft Graph delegated scopes (Outlook + SharePoint). One consent "
+                    "covers email and SharePoint files.",
     )
     outlook_enabled: bool = Field(default=True, description="Expose the outlook tool to agents")
+    sharepoint_enabled: bool = Field(default=True, description="Expose the sharepoint tool to agents")
 
     @classmethod
     def load(cls) -> "Settings":

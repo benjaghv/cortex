@@ -67,6 +67,15 @@ _TOOL_DESC = {
         "action='draft' (to, subject, body); action='trash' (id or ids=[...]) — confirms first. "
         "Send and trash ALWAYS prompt for confirmation; just call the tool, the gate is automatic."
     ),
+    "sharepoint": (
+        "sharepoint: browse and manage the user's SharePoint files (Microsoft 365). "
+        "Use for ANY request about SharePoint sites, document libraries or shared files. "
+        "action='sites' (query) finds sites; action='list' (site, path) lists a folder; "
+        "action='read' (site, path) reads a file; action='download' (site, path, dest) saves locally; "
+        "action='upload' (site, path, source) uploads — confirms first; action='search' (site, query). "
+        "NOTE: if SharePoint folders are already synced to the user's OneDrive locally, prefer the "
+        "'filesystem' tool on that local path — it's simpler and needs no auth."
+    ),
 }
 
 _ALL_TOOLS = tuple(_TOOL_DESC.keys())  # includes git, browser, document, all tools
@@ -111,7 +120,46 @@ _register(_make(
         "- git add → git(args='add <file>'). git commit → git(args='commit -m \"msg\"'). "
         "git push → git(args='push'). Do it, don't describe it.\n"
         "- CRITICAL: Word / .docx requests → ALWAYS use 'document' tool, NEVER filesystem.\n"
-        "- CRITICAL: presentation / slides / .pptx requests → ALWAYS use 'pptx' tool, NEVER filesystem."
+        "- CRITICAL: presentation / slides / .pptx requests → ALWAYS use 'pptx' tool, NEVER filesystem.\n"
+        "\n"
+        "BUILDING AN APP / WEBSITE / PROJECT — this is your core job. Do it, don't explain it:\n"
+        "1. NEVER give step-by-step instructions ('open File Explorer', 'run npm init', "
+        "'install Node'). The user wants the FILES created, not a tutorial. Build them yourself.\n"
+        "2. First create the folder: filesystem(action='mkdir', path='<folder>'). Use the exact "
+        "Desktop path listed above for 'en el escritorio'.\n"
+        "3. Then WRITE each file with filesystem(action='write', path=..., content=...) — REAL, "
+        "COMPLETE, working code. No placeholders, no '// add code here', no TODOs.\n"
+        "4. DEFAULT STACK = ZERO-INSTALL. Split into a SMALL set of files: index.html + styles.css "
+        "+ app.js (link them with relative paths: <link rel='stylesheet' href='styles.css'>, "
+        "<script src='app.js'></script>). This keeps each file focused AND keeps each write small "
+        "enough not to get truncated. Use localStorage for persistence. Runs by double-clicking — "
+        "no Node, no npm, no build step. Only use Node/React if the user EXPLICITLY asks.\n"
+        "   (A tiny app may be one index.html; but anything with real styling/logic → split the files.)\n"
+        "5. Keep it small but COMPLETE: full feature working end to end, not a stub.\n"
+        "6. When done, tell the user in ONE line how to open it (e.g. 'doble clic en "
+        "index.html dentro de cortexApp').\n"
+        "7. Plan the files in your head, then create them one by one in the SAME run — don't stop "
+        "after the folder.\n"
+        "\n"
+        "QUALITY BAR — build like a senior product engineer shipping an MVP, not a tutorial demo:\n"
+        "• DESIGN: define CSS custom properties (:root) for a palette — a neutral background, "
+        "white surfaces, ONE accent color (or a tasteful gradient). Use a system font stack, an 8px "
+        "spacing scale, border-radius 10-14px, soft box-shadows, and smooth transitions (0.2s). "
+        "Center the app in a max-width container. Make it look modern and intentional.\n"
+        "• RESPONSIVE: works on mobile and desktop (fl/grid + a media query).\n"
+        "• UX STATES: hover + focus styles on interactive elements; an empty-state message when "
+        "there's no data; input validation (don't add blank items); confirm before destructive delete.\n"
+        "• FULL CRUD when asked: Create, Read (list), Update (inline edit), Delete, plus toggle-done "
+        "and filters/counters if relevant. Every button must actually work.\n"
+        "• PERSISTENCE: localStorage, with a single render() that redraws from state. Keyboard nice-"
+        "to-haves (Enter to add).\n"
+        "• CODE: semantic HTML, clear named functions, addEventListener (no inline onclick=), short "
+        "comments per section. Escape user input when injecting into the DOM.\n"
+        "• Aim for something the user could screenshot and show off — polished, not bare.\n"
+        "• OPTIONAL polish shortcut: you MAY load Tailwind via CDN "
+        "(<script src=\"https://cdn.tailwindcss.com\"></script>) for fast, professional styling "
+        "with utility classes — still zero-install, still a single file. Use it when the user wants "
+        "something 'moderno/atractivo'. (Needs internet to load the CDN.)"
     ),
 ))
 
@@ -206,6 +254,9 @@ _register(_make(
         "search/read/send/draft/trash). send and trash auto-prompt to confirm.\n"
         "- When writing an email, NEVER leave bracketed placeholders like [Su Nombre] or "
         "[Empresa]. Use a real value or omit the line — placeholders look like spam.\n"
+        "- SharePoint files → 'sharepoint' tool (sites/list/read/download/upload/search). "
+        "BUT if the user has the SharePoint folder synced in OneDrive locally (path like "
+        "'OneDrive - Org'), prefer 'filesystem' on that path — no auth needed.\n"
         + _BROWSER_RULE
     ),
 ))

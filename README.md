@@ -92,18 +92,18 @@ Pick one based on your hardware. All free, no API key needed.
 
 | Model | Size | RAM | Best for |
 |---|---|---|---|
-| `qwen2.5-coder:1.5b` | 1 GB | 4 GB+ | Low-end hardware, fast responses |
-| `qwen2.5-coder:7b` ⭐ | 5 GB | 8 GB+ | Coding tasks — recommended default |
-| `qwen2.5-coder:14b` | 9 GB | 16 GB+ | Higher quality coding |
-| `qwen3:8b` | 5 GB | 8 GB+ | General tasks, good reasoning |
+| `qwen3:8b` ⭐ | 5 GB | 8 GB+ | Best tool-use + reasoning — recommended default |
+| `qwen3:14b` | 9 GB | 16 GB+ | Stronger, if it fits fully in your GPU |
+| `qwen3:4b` | 3 GB | 6 GB+ | Fast, low-end hardware |
+| `qwen2.5-coder:7b` | 5 GB | 8 GB+ | Coding-focused |
 | `deepseek-r1:8b` | 5 GB | 8 GB+ | Research, analysis, chain-of-thought |
-| `deepseek-r1:14b` | 9 GB | 16 GB+ | Strong reasoning |
 | `llama3.2:3b` | 2 GB | 6 GB+ | Light, fast, general use |
 | `phi4:14b` | 9 GB | 16 GB+ | Efficient, strong quality |
 | `gemma3:4b` | 3 GB | 6 GB+ | Google model, multilingual |
 
-> **Not sure?** Start with `qwen2.5-coder:1.5b` (low RAM) or `qwen2.5-coder:7b` (8GB+ RAM).  
-> More models at [ollama.com/search](https://ollama.com/search).
+> **Not sure?** Use `qwen3:8b` — best balance of tool-calling and speed.
+> Pick a model that fits **fully in your GPU** (`ollama ps` should say `100% GPU`); if it spills to
+> CPU it gets slow. More models at [ollama.com/search](https://ollama.com/search).
 
 ---
 
@@ -113,8 +113,8 @@ Pick one based on your hardware. All free, no API key needed.
 
 ```bash
 ollama serve                      # keep running in a separate terminal
-ollama pull qwen2.5-coder:7b      # recommended default (5 GB, 8 GB+ RAM)
-ollama pull qwen2.5-coder:1.5b    # lightweight planner / low-end hardware
+ollama pull qwen3:8b              # recommended default (5 GB, 8 GB+ RAM) — best tool-use
+ollama pull qwen3:4b              # lighter / low-end hardware
 ```
 
 ### 2. Initialize config
@@ -257,6 +257,7 @@ Each agent only sees its assigned tools — no accidental cross-contamination.
 | `pptx` | Create PowerPoint (.pptx) presentations — 4 themes, layouts, speaker notes | No* |
 | `gmail` | Search, read, **send**, draft + **trash** Gmail. Send/trash ask you to confirm first | OAuth* |
 | `outlook` | Search, read, **send**, draft + **trash** Outlook / Microsoft 365 email. Send/trash confirm first | OAuth* |
+| `sharepoint` | Browse SharePoint sites, list/read/download files, **upload** (confirms first), search | OAuth* |
 
 > \* `document` (.docx), `pdf` (.pdf), `pptx` (.pptx), `gmail` and `outlook` deps ship with the base install — nothing extra.
 > `browser` needs Chromium: run `cortex setup --install`.
@@ -293,7 +294,7 @@ cortex/
     filesystem.py     shell.py      git_tool.py   web.py
     browser.py        search.py     stock.py      weather.py
     datetime_tool.py  python_exec.py  document.py  pdf.py  pptx.py
-    gmail.py          outlook.py
+    gmail.py          outlook.py        sharepoint.py
 ```
 
 > `~/.cortex/` — config, stats, memory, run logs. Auto-created, never committed.
@@ -443,7 +444,8 @@ You bring your own free **Azure app registration** (one time):
    - Supported account types: *Accounts in any organizational directory and personal Microsoft accounts*
 2. **Authentication** → enable **Allow public client flows** = *Yes*
 3. **API permissions** → **Microsoft Graph** → **Delegated** → add: `Mail.Read`, `Mail.Send`,
-   `Mail.ReadWrite`, `offline_access`, `User.Read`
+   `Mail.ReadWrite`, `Sites.Read.All`, `Files.ReadWrite.All`, `offline_access`, `User.Read`
+   (the `Sites`/`Files` ones enable SharePoint — same login as email)
 4. Copy the **Application (client) ID** into `~/.cortex/config.toml`:
    ```toml
    microsoft_client_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -460,7 +462,26 @@ cortex run "manda un correo desde Outlook a ana@empresa.com diciendo que llego e
 ```
 
 > Tokens are cached in `~/.cortex/credentials/microsoft/` (never committed). `cortex connect outlook`
-> again to refresh or add another account. SharePoint support reuses this same Microsoft login.
+> again to refresh or add another account.
+
+### SharePoint
+
+The **same Microsoft login** also powers SharePoint (the `Sites.Read.All` + `Files.ReadWrite.All`
+scopes above). No separate setup — once `cortex connect outlook` is done, the `sharepoint` tool works.
+
+```bash
+cortex run "busca el sitio de SharePoint 'Contabilidad'"
+cortex run "lista los archivos en la biblioteca del sitio Contabilidad"
+cortex run "descarga el Excel de presupuesto de SharePoint a mi escritorio"
+cortex run "sube ~/Desktop/informe.pdf a la carpeta Informes del sitio Contabilidad"  # confirma
+```
+
+> **Tip:** if your SharePoint library is already **synced to OneDrive** on your PC, you don't need
+> this at all — cortex's `filesystem` tool reads those local folders directly (no auth). Use the
+> `sharepoint` tool only for libraries you haven't synced locally.
+
+> ⚠️ `Sites.Read.All` / `Files.ReadWrite.All` may require **admin consent** in some org tenants.
+> If your work/university blocks it, you can't grant them — but synced-OneDrive + `filesystem` still works.
 
 ---
 

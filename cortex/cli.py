@@ -27,14 +27,14 @@ from cortex.display import (
 
 _SUGGESTED_MODELS = [
     # (model,                    size,    ram,     description)
-    ("qwen2.5-coder:1.5b", "1 GB",  "4 GB+",  "fast · low-end hardware"),
-    ("qwen2.5-coder:7b",   "5 GB",  "8 GB+",  "coding · recommended ⭐"),
-    ("qwen3:8b",           "5 GB",  "8 GB+",  "general · good reasoning"),
+    ("qwen3:8b",           "5 GB",  "8 GB+",  "best tools + reasoning · recommended ⭐"),
+    ("qwen3:14b",          "9 GB",  "16 GB+", "stronger · needs more VRAM"),
+    ("qwen3:4b",           "3 GB",  "6 GB+",  "fast · low-end hardware"),
+    ("qwen2.5-coder:7b",   "5 GB",  "8 GB+",  "coding-focused"),
     ("deepseek-r1:8b",     "5 GB",  "8 GB+",  "research · chain-of-thought"),
     ("llama3.2:3b",        "2 GB",  "6 GB+",  "light · fast · general"),
     ("gemma3:4b",          "3 GB",  "6 GB+",  "multilingual · Google"),
     ("phi4:14b",           "9 GB",  "16 GB+", "high quality · efficient"),
-    ("deepseek-r1:14b",    "9 GB",  "16 GB+", "strong reasoning"),
 ]
 
 
@@ -158,7 +158,7 @@ def chat(
         console.print("  [#22D3EE]2.[/] Or on Windows: look for the Ollama icon in the system tray")
         console.print("     and make sure it says 'Running'.")
         console.print("  [#22D3EE]3.[/] If Ollama isn't installed: [bold]https://ollama.com/download[/]")
-        console.print("  [#22D3EE]4.[/] After starting, pull a model:  [bold]ollama pull qwen2.5-coder:7b[/]")
+        console.print("  [#22D3EE]4.[/] After starting, pull a model:  [bold]ollama pull qwen3:8b[/]")
         console.print()
         console.print(f"  [dim]Expected URL: {cfg.ollama_base_url}  "
                       "(change with CORTEX_OLLAMA_BASE_URL or ~/.cortex/config.toml)[/]")
@@ -390,8 +390,8 @@ def chat(
             console.print("  [#22D3EE]/verbose[/]         — toggle verbose / clean mode")
             console.print("  [#22D3EE]/voice[/]           — dictate your next prompt by speaking")
             console.print("  [#22D3EE]/connect gmail[/]      — connect a Gmail account (browser OAuth)")
-            console.print("  [#22D3EE]/connect outlook[/]    — connect an Outlook / Microsoft 365 account (device code)")
-            console.print("  [#22D3EE]/disconnect outlook[/] — remove the connected Outlook account")
+            console.print("  [#22D3EE]/connect outlook[/]    — connect Outlook + SharePoint (Microsoft 365, device code)")
+            console.print("  [#22D3EE]/disconnect outlook[/] — remove the connected Microsoft account")
             console.print("  [#22D3EE]/account[/] \\[email]    — show or switch active Gmail / Outlook account")
             console.print("  [#22D3EE]/dry-run <task>[/]     — plan without executing")
             console.print("  [#22D3EE]exit[/]                — quit")
@@ -433,7 +433,7 @@ def chat(
             else:
                 console.print("  Fix: open a new terminal →  [bold]ollama serve[/]")
                 console.print("  No Ollama? Download: [bold]https://ollama.com/download[/]")
-                console.print("  Then pull a model: [bold]ollama pull qwen2.5-coder:7b[/]")
+                console.print("  Then pull a model: [bold]ollama pull qwen3:8b[/]")
             console.print()
 
     console.print()
@@ -813,11 +813,12 @@ def _guided_gmail_setup(cfg) -> None:
 def _run_connect(cfg, service: str, client_secret: "str | None") -> None:
     """Shared connect flow used by `cortex connect` and the chat /connect command."""
     svc = service.lower()
-    if svc in ("outlook", "microsoft", "office365", "o365"):
+    # Outlook and SharePoint share the SAME Microsoft login (one token, one app).
+    if svc in ("outlook", "microsoft", "office365", "o365", "sharepoint", "sp"):
         _run_connect_outlook(cfg)
         return
     if svc not in ("gmail", "google"):
-        print_error(f"Servicio '{service}' no soportado todavía. Disponible: gmail, outlook")
+        print_error(f"Servicio '{service}' no soportado todavía. Disponible: gmail, outlook, sharepoint")
         return
     from cortex.integrations import google_auth
     # No OAuth client anywhere yet → launch the guided assistant (open pages + watch).
@@ -893,7 +894,8 @@ def _guided_outlook_setup(cfg) -> "str | None":
     step("2.", ("Authentication", "bold"), (" → abajo, ", "white"),
          ("'Allow public client flows' = Yes", "bold"), (" → Save.", "white"))
     step("3.", ("API permissions", "bold"), (" → Add → Microsoft Graph → Delegated → agrega:\n", "white"),
-         ("       Mail.Read, Mail.Send, Mail.ReadWrite, offline_access, User.Read", "bold"))
+         ("       Mail.Read, Mail.Send, Mail.ReadWrite, Sites.Read.All,\n"
+          "       Files.ReadWrite.All, offline_access, User.Read", "bold"))
     step("4.", ("En el ", "white"), ("Overview", "bold"),
          (" copia el ", "white"), ("Application (client) ID", "bold"),
          (" y pégalo aquí abajo.", "white"))

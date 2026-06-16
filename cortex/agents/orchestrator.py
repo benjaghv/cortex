@@ -80,6 +80,29 @@ _DOC_KEYWORDS = ("word", ".docx", "documento", "document", "crea un word",
 # Email workflows are sequential (read → compose → send) → single agent
 _EMAIL_KEYWORDS = ("correo", "email", "gmail", "outlook", "inbox", "bandeja", "mail")
 
+# Building software (app/site/project/script) is a coherent SEQUENTIAL job: create
+# folder → write multiple files → maybe run. Never parallelize it; route to ONE coder.
+_BUILD_KEYWORDS = (
+    "app", "aplicación", "aplicacion", "aplicativo", "proyecto", "project",
+    "website", "web app", "webapp", "sitio web", "página web", "pagina web",
+    "landing", "gestor de", "gestor ", "to-do", "todo app", "task manager",
+    "script", "programa ", "juego", "game", "calculadora", "dashboard",
+    "componente", "página ", "pagina ", "html", "frontend", "backend", "api ",
+)
+_BUILD_VERBS = (
+    "crea", "créa", "crear", "créame", "creame", "haz", "hazme", "hacer",
+    "genera", "genérame", "generame", "construye", "arma", "desarrolla",
+    "build", "make", "create", "develop", "programa", "codea", "código",
+)
+
+
+def _wants_build(task: str) -> bool:
+    """True for 'create/build an app/site/project/script' tasks → single coder agent."""
+    t = task.strip().lower()
+    has_verb = any(t.startswith(v) or f" {v} " in f" {t} " for v in _BUILD_VERBS)
+    has_noun = any(kw in t for kw in _BUILD_KEYWORDS)
+    return has_verb and has_noun
+
 
 def _looks_simple(task: str) -> bool:
     """Cheap pre-check: short/single-clause tasks and single-URL tasks skip the planner."""
@@ -207,6 +230,11 @@ def _is_conversational(task: str) -> bool:
 def _plan(task: str, cfg: Settings, cloud: bool) -> "list[tuple[AgentPreset, str]]":
     """Return list of (preset, subtask). One item = single mode."""
     generalist = presets.generalist()
+    # Building an app/site/project is ONE coherent job → a single coder agent that
+    # writes all the files in sequence. Never let the planner split it.
+    if _wants_build(task):
+        coder = presets.get_preset("coder") or generalist
+        return [(coder, task)]
     if _looks_simple(task):
         return [(generalist, task)]
 

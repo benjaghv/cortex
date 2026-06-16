@@ -54,6 +54,8 @@ cortex/
     pptx.py          → create .pptx (python-pptx) from a list of slide specs, 4 themes
     gmail.py         → Gmail (search/read/send/draft/trash) via integrations.google_auth; settings=cfg like shell
     outlook.py       → Outlook/M365 email (search/read/send/draft/trash) via integrations.microsoft_auth (Graph REST)
+    sharepoint.py    → SharePoint files (sites/list/read/download/upload/search) via integrations.microsoft_auth.
+                       Same Microsoft login as Outlook. If folders synced in OneDrive → prefer filesystem.
 
 tests/
     test_tools.py    → tool logic only, no LLM/network
@@ -163,7 +165,7 @@ Env override prefix: `CORTEX_`.
 ```bash
 pip install -e ".[dev]"
 ollama serve                    # separate terminal
-ollama pull qwen2.5-coder:7b
+ollama pull qwen3:8b
 cortex config --init
 cortex run "test task"
 pytest -v

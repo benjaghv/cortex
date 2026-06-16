@@ -353,7 +353,20 @@ def run_agent(
                     force_answer = True
                     continue
 
-            final = llm.humanize(msg.content or "(no response)")
+            # Empty content with finish_reason='length' = the model hit the output cap
+            # mid-generation (often while writing a big file). Give an actionable message.
+            if not (msg.content or "").strip():
+                fr = getattr(resp.choices[0], "finish_reason", None)
+                if fr == "length":
+                    final = ("⚠ El modelo se quedó sin espacio de salida (output muy largo). "
+                             "Sube 'max_tokens'/'num_ctx' en ~/.cortex/config.toml, divide el "
+                             "trabajo en archivos más pequeños, o usa un modelo más grande.")
+                else:
+                    final = "(sin respuesta — el modelo no devolvió contenido. Reintenta o cambia de modelo.)"
+                emit(Event(agent=preset.name, kind="finished", result=final))
+                return final
+
+            final = llm.humanize(msg.content)
             emit(Event(agent=preset.name, kind="finished", result=final))
             return final
 

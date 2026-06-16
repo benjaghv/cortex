@@ -141,6 +141,9 @@ _VERBS = {
     ("outlook", "draft"):     ("DRAFT",   "📝", "info"),
     ("outlook", "trash"):     ("TRASH",   "🗑", "warning"),
     ("outlook", None):        ("OUTLOOK", "📨", "info"),
+    ("sharepoint", "upload"): ("UPLOAD",   "📤", "warning"),
+    ("sharepoint", "download"):("DOWNLOAD","📥", "info"),
+    ("sharepoint", None):     ("SHAREPT",  "🗂", "info"),
 }
 
 
@@ -190,6 +193,8 @@ def _clean_label(tool: str, args: dict) -> tuple[str, str, str]:
         hint = path.replace("\\", "/").rstrip("/").split("/")[-1] if path else ""
     elif tool in ("gmail", "outlook"):
         hint = str(args.get("to") or args.get("query") or args.get("id") or "")
+    elif tool == "sharepoint":
+        hint = str(args.get("site") or args.get("path") or args.get("query") or args.get("action") or "")
     if len(hint) > 40:
         hint = hint[:37] + "..."
     return gerund, hint, style
@@ -209,7 +214,7 @@ _BANNER_LINES = [
 _BANNER_COLORS = ["#9B7FFF", "#8B6FFF", "#7C5CFF", "#7C5CFF", "#6B4EEE", "#5A3DDD"]
 
 
-def print_banner(model: str = "", version: str = "0.3.0") -> None:
+def print_banner(model: str = "", version: str = "0.4.0") -> None:
     console.print()
     for line, color in zip(_BANNER_LINES, _BANNER_COLORS):
         console.print(Text(line, style=f"bold {color}"), justify="center")

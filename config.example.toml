@@ -3,10 +3,12 @@
 # Or run: cortex config --init
 
 # ── LLM local (Ollama) ──────────────────────────────────────────────────────
-model = "ollama/qwen2.5-coder:7b"
-planner_model = "ollama/qwen2.5-coder:1.5b"   # fast local router
+model = "ollama/qwen3:8b"                     # best tool-use + reasoning (recommended)
+planner_model = "ollama/qwen3:4b"             # fast local router (optional)
 ollama_base_url = "http://localhost:11434"
-max_tokens = 4096
+max_tokens = 8192          # max output tokens — big enough to write a full file in one go
+num_ctx = 16384            # Ollama context window — must fit prompt + the file being written
+                           # (larger = more VRAM; lower to 8192 if you run out of memory)
 temperature = 0.1
 max_iterations = 20
 
@@ -79,7 +81,9 @@ cost_ref_output_per_1m = 15.0
 # Outlook / Microsoft 365: register a free Azure app, then set its client id here.
 #   portal.azure.com → Entra ID → App registrations → New registration
 #   (any org directory + personal accounts) → Authentication → Allow public client flows = Yes
-#   → API permissions → Graph → Delegated: Mail.Read, Mail.Send, Mail.ReadWrite, offline_access, User.Read
+#   → API permissions → Graph → Delegated: Mail.Read, Mail.Send, Mail.ReadWrite,
+#     Sites.Read.All, Files.ReadWrite.All, offline_access, User.Read
+#   (Sites/Files enable SharePoint — same login as email)
 # microsoft_client_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 # microsoft_tenant    = "common"   # common = work + personal; or your tenant id/domain
-# Then: cortex connect outlook
+# Then: cortex connect outlook   (covers Outlook AND SharePoint)
