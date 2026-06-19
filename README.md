@@ -66,7 +66,7 @@ python -m venv .venv
 # Windows
 .venv\Scripts\activate
 # macOS / Linux
-source .venv/bin/activate
+source .venv/Scripts/activate
 
 pip install -e ".[dev]"
 ```
